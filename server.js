@@ -212,6 +212,41 @@ function createServerHandler() {
         });
       }
 
+      // 3-1. KEC Revision Focus Questions
+      if (pathname === "/api/questions/kec" && req.method === "GET") {
+        const kecQuestions = QUESTIONS.filter(q => q.kec_revision && q.kec_revision.is_revised);
+        return sendJSON(res, 200, {
+          total: kecQuestions.length,
+          questions: kecQuestions
+        });
+      }
+
+      // 3-2. Question Search (Keyword Search across question, explanation, source, KEC topics)
+      if (pathname === "/api/questions/search" && req.method === "GET") {
+        const qParam = (parsedUrl.searchParams.get("q") || "").trim().toLowerCase();
+        if (!qParam) {
+          return sendJSON(res, 200, { query: "", total: 0, questions: [] });
+        }
+        const matched = QUESTIONS.filter(q => {
+          const inQuestion = (q.question || "").toLowerCase().includes(qParam);
+          const inExp = (q.explanation || "").toLowerCase().includes(qParam);
+          const inSource = (q.official_source || "").toLowerCase().includes(qParam);
+          const inSubject = (q.subject || "").toLowerCase().includes(qParam);
+          let inKec = false;
+          if (q.kec_revision) {
+            inKec = (q.kec_revision.topic || "").toLowerCase().includes(qParam) ||
+                    (q.kec_revision.before || "").toLowerCase().includes(qParam) ||
+                    (q.kec_revision.after || "").toLowerCase().includes(qParam);
+          }
+          return inQuestion || inExp || inSource || inSubject || inKec;
+        });
+        return sendJSON(res, 200, {
+          query: qParam,
+          total: matched.length,
+          questions: matched
+        });
+      }
+
       // 4. Auth: Register
       if (pathname === "/api/auth/register" && req.method === "POST") {
         try {

@@ -78,6 +78,25 @@ async function runTests() {
     assert.strictEqual(practice.data.questions.length, 5);
     practice.data.questions.forEach(q => assert.strictEqual(q.subject_id, 2));
 
+    console.log("3-1. Testing GET /api/questions/kec");
+    const kecRes = await request("GET", "/api/questions/kec");
+    assert.strictEqual(kecRes.status, 200);
+    assert(Array.isArray(kecRes.data.questions), "KEC endpoint must return array");
+    assert(kecRes.data.total >= 8, `Expected at least 8 KEC questions, found ${kecRes.data.total}`);
+    kecRes.data.questions.forEach(q => {
+      assert(q.kec_revision && q.kec_revision.is_revised, "Must have kec_revision.is_revised true");
+    });
+
+    console.log("3-2. Testing GET /api/questions/search");
+    const searchRes = await request("GET", "/api/questions/search?q=인덕턴스");
+    assert.strictEqual(searchRes.status, 200);
+    assert(searchRes.data.total > 0, "Search for '인덕턴스' should find questions");
+    assert(searchRes.data.questions.length === searchRes.data.total);
+
+    const searchKec = await request("GET", "/api/questions/search?q=KEC");
+    assert.strictEqual(searchKec.status, 200);
+    assert(searchKec.data.total >= 5, "Search for 'KEC' should find multiple questions");
+
     console.log("4. Testing User Auth flow (Register -> Login -> Me)");
     const testUser = {
       username: `test_user_${Date.now()}`,
