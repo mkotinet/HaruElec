@@ -1,0 +1,13 @@
+{
+  "name": "haru-elec",
+  "version": "1.0.0",
+  "description": "전기기사 필기 시험 하루 10문제 & 고품질 해설 웹 애플리케이션",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/questions.test.js && node tests/server.test.js"
+  },
+  "keywords": ["전기기사", "문제은행", "CBT", "하루10문제"],
+  "author": "mkotinet",
+  "license": "MIT"
+}
