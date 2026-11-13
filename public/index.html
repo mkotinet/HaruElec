@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>⚡ 하루전기 (Haru Elec) - 전기기사 필기 데일리 10문제</title>
+  <meta name="description" content="매일 10문제로 완성하는 전기기사 필기 시험 문제은행 & 고품질 해설, 스마트 오답노트">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- KaTeX for beautiful math equations -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner container">
+      <div class="brand" id="brandLogo">
+        <span class="brand-icon">⚡</span>
+        <div class="brand-text">
+          <h1>하루전기</h1>
+          <span class="brand-sub">전기기사 필기 10제</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="streak-badge" id="streakBadge" title="연속 출석 스트릭">
+          <span class="streak-icon">🔥</span>
+          <span class="streak-count" id="streakCount">0</span>일 연속
+        </div>
+
+        <div class="user-menu" id="userMenu">
+          <button class="btn btn-outline-sm" id="authBtn">로그인</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content container">
+
+    <!-- Hero / Top Summary Card -->
+    <section class="summary-card glass" id="dashboardHero">
+      <div class="summary-info">
+        <div class="today-tag" id="todayDateTag">📅 2026. 11. 13</div>
+        <h2 class="summary-title" id="summaryGreeting">오늘의 번개 10문제에 도전하세요!</h2>
+        <p class="summary-desc">전기자기학부터 전기설비기준까지, 하루 10문제로 합격권(60점) 돌파!</p>
+      </div>
+      <div class="quick-stats">
+        <div class="qstat-item">
+          <span class="qstat-num" id="statTodayStatus">미완료</span>
+          <span class="qstat-lbl">오늘의 풀이</span>
+        </div>
+        <div class="qstat-item">
+          <span class="qstat-num" id="statTotalSolved">0</span>
+          <span class="qstat-lbl">누적 풀이</span>
+        </div>
+        <div class="qstat-item">
+          <span class="qstat-num" id="statAccuracy">0%</span>
+          <span class="qstat-lbl">평균 정답률</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mode Selector Tabs -->
+    <nav class="mode-tabs">
+      <button class="mode-tab active" data-mode="daily">
+        <span class="tab-icon">⚡</span> 오늘의 10문제
+      </button>
+      <button class="mode-tab" data-mode="practice">
+        <span class="tab-icon">📚</span> 과목별 집중
+      </button>
+      <button class="mode-tab" data-mode="wrong">
+        <span class="tab-icon">📝</span> 오답노트 <span class="badge" id="wrongBadge">0</span>
+      </button>
+      <button class="mode-tab" data-mode="stats">
+        <span class="tab-icon">📊</span> 학습 통계
+      </button>
+    </nav>
+
+    <!-- Subject Filter (for Practice Mode) -->
+    <div class="subject-filter-bar glass hidden" id="subjectFilterBar">
+      <span class="filter-label">과목 선택:</span>
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-sub="0">전체 과목 (랜덤)</button>
+        <button class="filter-btn" data-sub="1">1. 전기자기학</button>
+        <button class="filter-btn" data-sub="2">2. 전력공학</button>
+        <button class="filter-btn" data-sub="3">3. 전기기기</button>
+        <button class="filter-btn" data-sub="4">4. 회로이론·제어</button>
+        <button class="filter-btn" data-sub="5">5. 전기설비기준</button>
+      </div>
+    </div>
+
+    <!-- Quiz Session View -->
+    <section class="quiz-container" id="quizSection">
+      <!-- Quiz Header -->
+      <div class="quiz-header glass">
+        <div class="quiz-progress-wrap">
+          <div class="quiz-info-row">
+            <span class="subject-tag" id="currentSubjectTag">제1과목 전기자기학</span>
+            <span class="question-progress" id="questionProgressText">Q 1 / 10</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressBarFill" style="width: 10%;"></div>
+          </div>
+        </div>
+        <div class="quiz-actions">
+          <button class="btn-icon" id="bookmarkBtn" title="이 문제 북마크">
+            <span class="star-icon">☆</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Question Card -->
+      <article class="question-card glass" id="questionCard">
+        <div class="question-meta">
+          <span class="year-badge" id="questionYear">2022년 1회 기출</span>
+        </div>
+        <div class="question-body" id="questionText">
+          문제를 불러오는 중입니다...
+        </div>
+
+        <!-- Multiple Choice Options -->
+        <div class="options-list" id="optionsList">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Explanation Card (Shown after answering) -->
+        <div class="explanation-box glass hidden" id="explanationBox">
+          <div class="exp-header">
+            <span class="exp-icon">💡</span>
+            <h4>충실 해설 & 핵심 분석</h4>
+          </div>
+          <div class="exp-content" id="explanationContent">
+            <!-- Rendered with KaTeX math -->
+          </div>
+        </div>
+      </article>
+
+      <!-- Navigation Controls -->
+      <div class="quiz-footer">
+        <button class="btn btn-secondary" id="prevBtn" disabled>◀ 이전 문제</button>
+        <button class="btn btn-primary" id="nextBtn">다음 문제 ▶</button>
+        <button class="btn btn-accent hidden" id="finishBtn">🏆 결과 확인하기</button>
+      </div>
+    </section>
+
+    <!-- Quiz Result Modal / Screen -->
+    <section class="result-container glass hidden" id="resultSection">
+      <div class="result-header">
+        <div class="result-stamp" id="resultStamp">⚡</div>
+        <h2 id="resultTitle">오늘의 10문제 완료!</h2>
+        <p class="result-subtitle" id="resultSubtitle">수고하셨습니다. 매일 10문제가 합격을 만듭니다.</p>
+      </div>
+
+      <div class="score-display">
+        <div class="score-circle">
+          <span class="score-num" id="scoreNum">80</span>
+          <span class="score-total">/ 100점</span>
+        </div>
+        <div class="score-status" id="scoreStatus">
+          <span class="pass-tag">합격권 달성! (기준 60점)</span>
+        </div>
+      </div>
+
+      <div class="result-breakdown">
+        <h3>과목별 채점 결과</h3>
+        <div class="subject-results-grid" id="subjectResultsGrid">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <div class="result-actions">
+        <button class="btn btn-secondary" id="reviewWrongBtn">📝 틀린 문제 복습하기</button>
+        <button class="btn btn-primary" id="restartDailyBtn">🔄 다시 풀기</button>
+      </div>
+    </section>
+
+    <!-- Stats Section View -->
+    <section class="stats-container glass hidden" id="statsSection">
+      <h2 class="section-title">📊 나의 학습 통계 & 취약 과목 진단</h2>
+      <div class="stats-cards-grid">
+        <div class="stat-card">
+          <span class="stat-label">누적 문제 풀이</span>
+          <span class="stat-value" id="statsTotalSolved">0제</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">평균 정답률</span>
+          <span class="stat-value" id="statsOverallAccuracy">0%</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">연속 출석 스트릭</span>
+          <span class="stat-value" id="statsStreak">0일</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">오답노트 보관함</span>
+          <span class="stat-value" id="statsWrongCount">0개</span>
+        </div>
+      </div>
+
+      <div class="subject-mastery-list">
+        <h3>과목별 정답률 & 숙련도</h3>
+        <div id="subjectMasteryBars">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Auth Modal -->
+  <div class="modal-overlay hidden" id="authModal">
+    <div class="modal-card glass">
+      <div class="modal-header">
+        <h3 id="authModalTitle">로그인</h3>
+        <button class="btn-close" id="closeAuthModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="authForm">
+          <div class="form-group">
+            <label for="authUsername">아이디</label>
+            <input type="text" id="authUsername" class="form-input" placeholder="아이디 입력" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="authPassword">비밀번호</label>
+            <input type="password" id="authPassword" class="form-input" placeholder="비밀번호 입력" required autocomplete="current-password">
+          </div>
+          <div class="form-group hidden" id="nicknameGroup">
+            <label for="authNickname">닉네임</label>
+            <input type="text" id="authNickname" class="form-input" placeholder="학습용 닉네임 (선택)">
+          </div>
+          <div class="form-msg" id="authMsg"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="authSubmitBtn">로그인</button>
+        </form>
+        <div class="auth-toggle">
+          <span id="authToggleText">계정이 없으신가요?</span>
+          <button class="btn-link" id="authToggleBtn">회원가입</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast hidden" id="appToast">알림 메시지</div>
+
+  <!-- App Script -->
+  <script src="/js/app.js"></script>
+</body>
+</html>

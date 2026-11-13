@@ -130,7 +130,21 @@ async function runTests() {
     assert.strictEqual(statsRes.data.streak, 3);
     assert.strictEqual(statsRes.data.totalSolved, 10);
 
-    console.log("✅ All server REST API endpoints verified successfully!");
+    console.log("6. Testing Static Asset Serving (HTML, CSS, JS)");
+    const htmlRes = await request("GET", "/");
+    assert.strictEqual(htmlRes.status, 200);
+    assert(htmlRes.headers["content-type"].includes("text/html"));
+    assert(htmlRes.raw.includes("하루전기"), "HTML must contain app title 하루전기");
+
+    const cssRes = await request("GET", "/css/style.css");
+    assert.strictEqual(cssRes.status, 200);
+    assert(cssRes.headers["content-type"].includes("text/css"));
+
+    const jsRes = await request("GET", "/js/app.js");
+    assert.strictEqual(jsRes.status, 200);
+    assert(jsRes.headers["content-type"].includes("application/javascript"));
+
+    console.log("✅ All server REST API endpoints and static assets verified successfully!");
   } finally {
     server.close();
   }
