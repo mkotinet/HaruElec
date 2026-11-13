@@ -79,6 +79,12 @@
       <button class="mode-tab" data-mode="practice">
         <span class="tab-icon">📚</span> 과목별 집중
       </button>
+      <button class="mode-tab" data-mode="kec">
+        <span class="tab-icon">🔥</span> KEC 개정특강
+      </button>
+      <button class="mode-tab" data-mode="search">
+        <span class="tab-icon">🔍</span> 문제 검색
+      </button>
       <button class="mode-tab" data-mode="wrong">
         <span class="tab-icon">📝</span> 오답노트 <span class="badge" id="wrongBadge">0</span>
       </button>
@@ -98,6 +104,16 @@
         <button class="filter-btn" data-sub="4">4. 회로이론·제어</button>
         <button class="filter-btn" data-sub="5">5. 전기설비기준</button>
       </div>
+    </div>
+
+    <!-- Search Bar (for Search Mode) -->
+    <div class="search-bar-wrap glass hidden" id="searchBarWrap">
+      <div class="search-input-group">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" class="search-input" placeholder="키워드 검색 (예: KEC, 인덕턴스, 누전차단기, 쿨롱, 접지...)">
+        <button class="btn btn-primary" id="searchSubmitBtn">검색</button>
+      </div>
+      <div class="search-info-text" id="searchInfoText">전체 125제 문제은행 및 KEC 규정 검색어를 입력하세요.</div>
     </div>
 
     <!-- Quiz Session View -->
@@ -124,6 +140,8 @@
       <article class="question-card glass" id="questionCard">
         <div class="question-meta">
           <span class="year-badge" id="questionYear">2022년 1회 기출</span>
+          <span class="source-badge" id="questionSource">Q-Net 출제기준</span>
+          <span class="kec-badge hidden" id="questionKecBadge">🔥 KEC 최신 개정</span>
         </div>
         <div class="question-body" id="questionText">
           문제를 불러오는 중입니다...
@@ -140,6 +158,26 @@
             <span class="exp-icon">💡</span>
             <h4>충실 해설 & 핵심 분석</h4>
           </div>
+
+          <!-- KEC Revision Highlight Card -->
+          <div class="kec-diff-card hidden" id="kecDiffCard">
+            <div class="kec-diff-title">
+              <span class="kec-diff-fire">🔥</span>
+              <span class="kec-topic-text" id="kecDiffTopic">KEC 최신 개정 핵심 비교</span>
+            </div>
+            <div class="kec-diff-grid">
+              <div class="diff-box diff-before">
+                <div class="diff-lbl">❌ 종전 기준 (구 규정)</div>
+                <div class="diff-val" id="kecDiffBefore">-</div>
+              </div>
+              <div class="diff-arrow">➔</div>
+              <div class="diff-box diff-after">
+                <div class="diff-lbl">✅ 최신 KEC 개정 규정</div>
+                <div class="diff-val" id="kecDiffAfter">-</div>
+              </div>
+            </div>
+          </div>
+
           <div class="exp-content" id="explanationContent">
             <!-- Rendered with KaTeX math -->
           </div>

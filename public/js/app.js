@@ -86,6 +86,16 @@
     progressBarFill: document.getElementById("progressBarFill"),
     bookmarkBtn: document.getElementById("bookmarkBtn"),
     questionYear: document.getElementById("questionYear"),
+    questionSource: document.getElementById("questionSource"),
+    questionKecBadge: document.getElementById("questionKecBadge"),
+    kecDiffCard: document.getElementById("kecDiffCard"),
+    kecDiffTopic: document.getElementById("kecDiffTopic"),
+    kecDiffBefore: document.getElementById("kecDiffBefore"),
+    kecDiffAfter: document.getElementById("kecDiffAfter"),
+    searchBarWrap: document.getElementById("searchBarWrap"),
+    searchInput: document.getElementById("searchInput"),
+    searchSubmitBtn: document.getElementById("searchSubmitBtn"),
+    searchInfoText: document.getElementById("searchInfoText"),
     questionText: document.getElementById("questionText"),
     optionsList: document.getElementById("optionsList"),
     explanationBox: document.getElementById("explanationBox"),
@@ -268,6 +278,50 @@
     }
   }
 
+  // Load KEC Focus Questions
+  async function loadKecQuestions() {
+    try {
+      DOM.questionText.textContent = "KEC 최신 개정 집중 특강 문제를 불러오는 중입니다...";
+      const res = await fetch(`/api/questions/kec`);
+      const data = await res.json();
+      state.questions = data.questions || [];
+      state.currentIndex = 0;
+      state.userAnswers = {};
+      renderQuestion();
+      showToast(`🔥 KEC 최신 개정 핵심 ${state.questions.length}문제가 준비되었습니다!`);
+    } catch (e) {
+      DOM.questionText.textContent = "KEC 문제를 불러오지 못했습니다.";
+    }
+  }
+
+  // Perform Keyword Search
+  async function performSearch(query) {
+    const trimmed = (query || "").trim();
+    if (!trimmed) {
+      showToast("검색할 키워드를 입력해주세요.");
+      return;
+    }
+    try {
+      DOM.searchInfoText.textContent = `'${trimmed}' 검색 중...`;
+      const res = await fetch(`/api/questions/search?q=${encodeURIComponent(trimmed)}`);
+      const data = await res.json();
+      const results = data.questions || [];
+      if (results.length === 0) {
+        DOM.searchInfoText.textContent = `'${trimmed}'에 대한 검색 결과가 없습니다. 다른 검색어를 시도해 보세요.`;
+        showToast("검색 결과가 없습니다.");
+        return;
+      }
+      DOM.searchInfoText.textContent = `'${trimmed}' 검색 완료: 총 ${results.length}개의 관련 문제가 발견되었습니다.`;
+      state.questions = results;
+      state.currentIndex = 0;
+      state.userAnswers = {};
+      renderQuestion();
+      showToast(`🔍 ${results.length}개의 문제가 검색되었습니다!`);
+    } catch (e) {
+      DOM.searchInfoText.textContent = "검색 중 오류가 발생했습니다.";
+    }
+  }
+
   // Load Wrong Note Questions
   async function loadWrongQuestions() {
     if (state.wrongQuestions.size === 0) {
@@ -306,7 +360,19 @@
     DOM.currentSubjectTag.textContent = `제${q.subject_id}과목 ${q.subject}`;
     DOM.questionProgressText.textContent = `Q ${currentNum} / ${total}`;
     DOM.progressBarFill.style.width = `${(currentNum / total) * 100}%`;
-    DOM.questionYear.textContent = `${q.year} 기출`;
+    DOM.questionYear.textContent = `${q.year}`;
+    if (DOM.questionSource) {
+      DOM.questionSource.textContent = q.official_source || "Q-Net 출제기준";
+    }
+
+    // KEC Badge
+    if (DOM.questionKecBadge) {
+      if (q.kec_revision && q.kec_revision.is_revised) {
+        DOM.questionKecBadge.classList.remove("hidden");
+      } else {
+        DOM.questionKecBadge.classList.add("hidden");
+      }
+    }
 
     // Bookmark star icon
     const isBookmarked = state.bookmarks.has(q.id);
@@ -353,10 +419,24 @@
     // Explanation Box
     if (isAnswered) {
       DOM.explanationContent.textContent = q.explanation;
+
+      // KEC Revision Highlight Card
+      if (DOM.kecDiffCard) {
+        if (q.kec_revision && q.kec_revision.is_revised) {
+          DOM.kecDiffTopic.textContent = q.kec_revision.topic || "KEC 최신 개정 비교";
+          DOM.kecDiffBefore.textContent = q.kec_revision.before || "-";
+          DOM.kecDiffAfter.textContent = q.kec_revision.after || "-";
+          DOM.kecDiffCard.classList.remove("hidden");
+        } else {
+          DOM.kecDiffCard.classList.add("hidden");
+        }
+      }
+
       DOM.explanationBox.classList.remove("hidden");
       renderMath(DOM.explanationContent);
     } else {
       DOM.explanationBox.classList.add("hidden");
+      if (DOM.kecDiffCard) DOM.kecDiffCard.classList.add("hidden");
     }
 
     // Navigation buttons
@@ -470,6 +550,7 @@
 
     if (newMode === "stats") {
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       DOM.quizSection.classList.add("hidden");
       DOM.statsSection.classList.remove("hidden");
       renderStatsView();
@@ -481,12 +562,27 @@
 
     if (newMode === "daily") {
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadDailyQuestions();
     } else if (newMode === "practice") {
       DOM.subjectFilterBar.classList.remove("hidden");
+      if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadPracticeQuestions(state.subjectId);
+    } else if (newMode === "kec") {
+      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
+      loadKecQuestions();
+    } else if (newMode === "search") {
+      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.searchBarWrap) DOM.searchBarWrap.classList.remove("hidden");
+      if (DOM.searchInput.value.trim()) {
+        performSearch(DOM.searchInput.value.trim());
+      } else {
+        DOM.searchInput.focus();
+      }
     } else if (newMode === "wrong") {
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadWrongQuestions();
     }
   }
@@ -665,6 +761,21 @@
 
     // Logo click resets to daily
     DOM.brandLogo.addEventListener("click", () => switchMode("daily"));
+
+    // Search events
+    if (DOM.searchSubmitBtn) {
+      DOM.searchSubmitBtn.addEventListener("click", () => {
+        performSearch(DOM.searchInput.value);
+      });
+    }
+    if (DOM.searchInput) {
+      DOM.searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          performSearch(DOM.searchInput.value);
+        }
+      });
+    }
   }
 
   // Initialize Application
