@@ -151,9 +151,12 @@ function seededShuffle(array, seed) {
   return result;
 }
 
-// Select 10 questions for daily quiz (2 per subject)
-function getDailyQuestions(dateStr) {
-  const seed = getDaySeed(dateStr);
+// Select 10 questions for daily quiz (2 per subject), with round support
+function getDailyQuestions(dateStr, round = 1) {
+  const roundNum = Math.max(1, parseInt(round, 10) || 1);
+  const baseSeed = getDaySeed(dateStr);
+  const roundOffset = (roundNum - 1) * 31;
+  const seed = (baseSeed + roundOffset) >>> 0;
   const bySubject = { 1: [], 2: [], 3: [], 4: [], 5: [] };
 
   QUESTIONS.forEach(q => {
@@ -166,7 +169,11 @@ function getDailyQuestions(dateStr) {
   for (let sId = 1; sId <= 5; sId++) {
     const list = bySubject[sId] || [];
     const shuffled = seededShuffle(list, seed + sId * 1000);
-    const chosen = shuffled.slice(0, 2);
+    const offset = ((roundNum - 1) * 2) % Math.max(1, list.length - 2);
+    let chosen = shuffled.slice(offset, offset + 2);
+    if (chosen.length < 2) {
+      chosen = shuffled.slice(0, 2);
+    }
     selected.push(...chosen);
   }
 
@@ -259,10 +266,12 @@ function createServerHandler() {
 
       // 2. Daily Questions
       if (pathname === "/api/questions/daily" && req.method === "GET") {
-        const todayStr = parsedUrl.searchParams.get("date") || new Date().toISOString().slice(0, 10);
-        const daily = getDailyQuestions(todayStr);
+        const todayStr = parsedUrl.searchParams.get("date") || getKSTDateString();
+        const roundNum = Math.max(1, parseInt(parsedUrl.searchParams.get("round") || "1", 10));
+        const daily = getDailyQuestions(todayStr, roundNum);
         return sendJSON(res, 200, {
           date: todayStr,
+          round: roundNum,
           total: daily.length,
           questions: daily
         });
@@ -499,6 +508,32 @@ function createServerHandler() {
         }
         const logs = loadLogs();
         return sendJSON(res, 200, { success: true, logs: logs.slice(-1000).reverse() });
+      }
+
+      // 8-3. Leaderboard (Real users only, ranked by totalPoints descending)
+      if (pathname === "/api/leaderboard" && req.method === "GET") {
+        const db = loadDB();
+        const list = Object.values(db.users).map(u => ({
+          username: u.username,
+          nickname: u.nickname || u.username,
+          streak: u.streak || 0,
+          totalPoints: u.totalPoints || 0,
+          todayScore: u.todayScore || 0,
+          maxRoundToday: u.maxRoundToday || 1,
+          totalSolved: (u.history || []).reduce((sum, h) => sum + (h.total || 0), 0)
+        }));
+
+        list.sort((a, b) => {
+          if ((b.totalPoints || 0) !== (a.totalPoints || 0)) {
+            return (b.totalPoints || 0) - (a.totalPoints || 0);
+          }
+          if ((b.streak || 0) !== (a.streak || 0)) {
+            return (b.streak || 0) - (a.streak || 0);
+          }
+          return (b.maxRoundToday || 1) - (a.maxRoundToday || 1);
+        });
+
+        return sendJSON(res, 200, { success: true, leaderboard: list });
       }
 
       // 9. Git Sync (for Portainer webhook or manual sync)
