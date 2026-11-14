@@ -67,9 +67,9 @@
     "semantic_hash": "0af6dac1778d0260a3728f17a04554ac"
   },
   "server.js": {
-    "mtime": 1794699048.0207312,
-    "seen": 1794699169.90527,
-    "ast_hash": "4bd1309312cc22d384e0562f3f7270ee",
+    "mtime": 1794699249.777474,
+    "seen": 1794699259.1942852,
+    "ast_hash": "4c97877494f54ec446800eb7169c7f86",
     "semantic_hash": ""
   },
   "tests/audit_logs.test.js": {

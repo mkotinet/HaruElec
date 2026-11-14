@@ -243,9 +243,13 @@ function sendJSON(res, status, obj) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD"
   });
-  res.end(JSON.stringify(obj));
+  if (res.req && res.req.method === "HEAD") {
+    res.end();
+  } else {
+    res.end(JSON.stringify(obj));
+  }
 }
 
 function authenticate(req, db) {
@@ -283,7 +287,7 @@ function createServerHandler() {
     // ------------------------------------------
     if (pathname.startsWith("/api/")) {
       // 1. Health
-      if (pathname === "/api/health" && req.method === "GET") {
+      if (pathname === "/api/health" && (req.method === "GET" || req.method === "HEAD")) {
         return sendJSON(res, 200, {
           status: "ok",
           service: "HaruElec",
@@ -575,7 +579,7 @@ function createServerHandler() {
       }
 
       // 8-3. Leaderboard (Real users only, ranked by totalPoints descending)
-      if (pathname === "/api/leaderboard" && req.method === "GET") {
+      if (pathname === "/api/leaderboard" && (req.method === "GET" || req.method === "HEAD")) {
         const db = loadDB();
         const list = Object.values(db.users).map(u => ({
           username: u.username,
@@ -611,7 +615,7 @@ function createServerHandler() {
       }
 
       // 10. App Version & Mobile Auto-Update Check
-      if (pathname === "/api/version" && req.method === "GET") {
+      if (pathname === "/api/version" && (req.method === "GET" || req.method === "HEAD")) {
         let verData = { version: "2.1.0", build: "20261115_0820" };
         try {
           const vFile = path.join(__dirname, "version.json");
