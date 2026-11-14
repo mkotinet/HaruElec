@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="app-version" content="2.1.0">
   <title>⚡ 하루전기 (Haru Elec) - 전기기사 필기 데일리 10문제</title>
   <meta name="description" content="매일 10문제로 완성하는 전기기사 필기 시험 문제은행 & 고품질 해설, 스마트 오답노트">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
@@ -18,7 +19,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
   <!-- App Stylesheet -->
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=2.1.0">
 </head>
 <body>
   <!-- Header -->
@@ -33,13 +34,28 @@
       </div>
 
       <div class="header-right">
+        <!-- Shield Badge (Max 2) -->
+        <div class="shield-badge" id="shieldBadge" title="보유 방패 (최대 2개)">
+          🛡️ <span id="shieldCount">0</span>/2
+        </div>
+
         <div class="streak-badge" id="streakBadge" title="연속 출석 스트릭">
           <span class="streak-icon">🔥</span>
           <span class="streak-count" id="streakCount">0</span>일 연속
         </div>
 
-        <button class="btn btn-outline-sm hidden" id="adminAuditBtn" style="border-color: #818cf8; color: #818cf8; margin-right: 6px;">
-          🛡️ 관리자 감사
+        <!-- Game Guide Modal Button -->
+        <button class="btn btn-outline-sm" id="gameGuideBtn" title="게임 규칙 & 찬스 아이템 안내" style="padding: 4px 8px;">
+          🎮 규칙
+        </button>
+
+        <!-- Hard Reload Page Button -->
+        <button class="btn btn-outline-sm" id="btnReloadPage" title="최신 버전 새로고침" style="padding: 4px 8px;">
+          🔄
+        </button>
+
+        <button class="btn btn-outline-sm hidden" id="adminAuditBtn" style="border-color: #818cf8; color: #818cf8; margin-right: 2px;">
+          🛡️ 감사
         </button>
         <div class="user-menu" id="userMenu">
           <button class="btn btn-outline-sm" id="authBtn">로그인</button>
@@ -51,10 +67,25 @@
   <!-- Main Container -->
   <main class="main-content container">
 
+    <!-- Resume Quiz Banner (Mobile Multitasking Resume) -->
+    <div class="resume-quiz-banner glass hidden" id="resumeQuizBanner">
+      <div class="resume-banner-content">
+        <span class="resume-icon">⚡</span>
+        <div>
+          <strong>풀던 10문제가 남아있습니다!</strong>
+          <span class="resume-info" id="resumeBannerInfo">진행률: 0/10</span>
+        </div>
+      </div>
+      <div class="resume-banner-actions">
+        <button class="btn btn-accent btn-sm" id="btnResumeQuiz">⚡ 이어하기</button>
+        <button class="btn btn-outline-sm btn-sm" id="btnDismissResume">닫기</button>
+      </div>
+    </div>
+
     <!-- Hero / Top Summary Card -->
     <section class="summary-card glass" id="dashboardHero">
       <div class="summary-info">
-        <div class="today-tag" id="todayDateTag">📅 2026. 11. 13</div>
+        <div class="today-tag" id="todayDateTag">📅 2026. 11. 15</div>
         <h2 class="summary-title" id="summaryGreeting">오늘의 번개 10문제에 도전하세요!</h2>
         <p class="summary-desc">전기자기학부터 전기설비기준까지, 하루 10문제로 합격권(60점) 돌파!</p>
       </div>
@@ -145,6 +176,26 @@
         </div>
       </div>
 
+      <!-- Quiz Chance Items Bar -->
+      <div class="quiz-item-bar glass" id="quizItemBar">
+        <button class="item-btn" id="btnItem5050" title="오답 보기 2개 즉시 소거">
+          <span class="item-icon">⚡</span>
+          <span class="item-name">50:50 전력차단</span>
+          <span class="item-badge" id="item5050Count">2</span>
+        </button>
+        <button class="item-btn" id="btnItemHeart" title="오답 1회 면제 및 재선택">
+          <span class="item-icon">💖</span>
+          <span class="item-name">절연보호</span>
+          <span class="item-badge" id="itemHeartCount">2</span>
+        </button>
+        <button class="item-btn" id="btnItem2x" title="이번 라운드 포인트 2배 적립">
+          <span class="item-icon">🚀</span>
+          <span class="item-name">2배 부스터</span>
+          <span class="item-badge" id="item2xCount">2</span>
+        </button>
+      </div>
+      <div class="active-item-banner hidden" id="activeItemBanner"></div>
+
       <!-- Question Card -->
       <article class="question-card glass" id="questionCard">
         <div class="question-meta">
@@ -223,6 +274,24 @@
         <h3>과목별 채점 결과</h3>
         <div class="subject-results-grid" id="subjectResultsGrid">
           <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Shield Decision Box (Strategic Shield Defense vs Save) -->
+      <div class="shield-decision-box glass hidden" id="shieldDecisionBox">
+        <div class="shield-decision-title">
+          <span class="shield-icon" style="font-size: 1.5rem;">🛡️</span>
+          <h3 style="font-size: 1.15rem; margin: 0; color: var(--accent-cyan);">방패 수호 기회!</h3>
+        </div>
+        <p class="shield-decision-desc" style="margin: 8px 0; font-size: 0.92rem; color: var(--text-main);">
+          아쉽게 만점을 놓쳤지만, 보유 중인 <strong>방패</strong>를 소모하여 이번 라운드 탈락을 방어하고 다음 라운드로 진출할 수 있습니다!
+        </p>
+        <div class="shield-decision-meta" style="margin-bottom: 14px; font-size: 0.88rem; color: var(--text-muted);">
+          현재 보유 방패: <strong><span id="shieldDecisionCount">1</span> / 2개</strong>
+        </div>
+        <div class="shield-decision-actions" style="display: flex; flex-direction: column; gap: 8px; max-width: 440px; margin: 0 auto;">
+          <button class="btn btn-accent" id="btnUseShieldDefense" style="font-weight: 700;">🛡️ 방패 1개 사용하고 다음 라운드 진출!</button>
+          <button class="btn btn-secondary" id="btnDeclineShield">방패 아끼고 오답 복습하기</button>
         </div>
       </div>
 
@@ -364,10 +433,48 @@
     </div>
   </div>
 
+  <!-- Game Guide Modal -->
+  <div class="modal-overlay hidden" id="gameGuideModal">
+    <div class="modal-card glass" style="max-width: 580px; width: 92%;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>🎮</span> 하루전기 게임 규칙 & 찬스 아이템 안내
+        </h3>
+        <button class="btn-close" id="closeGameGuideModal">✕</button>
+      </div>
+      <div class="modal-body" style="line-height: 1.6; font-size: 0.95rem; color: var(--text-main);">
+        <div style="margin-bottom: 16px;">
+          <h4 style="color: var(--accent-elec); font-size: 1rem; margin-bottom: 6px;">🛡️ 방패(Shield) 시스템</h4>
+          <p style="margin: 0; color: var(--text-muted); font-size: 0.88rem;">
+            • 2연속 100점 만점 달성 시 방패 1개가 지급됩니다. (최대 2개 보유 가능)<br>
+            • 3연속 만점 달성 시에는 특별 보너스 <strong>+300P</strong>가 추가 지급됩니다.<br>
+            • 라운드 탈락 위기 시 방패 사용 여부를 직접 선택하여 다음 라운드로 안전하게 진출할 수 있습니다.
+          </p>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <h4 style="color: var(--accent-elec); font-size: 1rem; margin-bottom: 6px;">⚡ 전기 찬스 아이템</h4>
+          <p style="margin: 0; color: var(--text-muted); font-size: 0.88rem;">
+            • <strong>⚡ 50:50 전력 차단</strong>: 오답 보기 2개를 즉시 소거하여 정답 확률을 높입니다.<br>
+            • <strong>💖 절연 보호</strong>: 오답을 선택해도 1회 면제되어 다른 보기를 다시 고를 수 있습니다.<br>
+            • <strong>🚀 2배 부스터</strong>: 이번 라운드에서 획득하는 모든 점수가 2배로 적립됩니다.
+          </p>
+        </div>
+        <div>
+          <h4 style="color: var(--accent-elec); font-size: 1rem; margin-bottom: 6px;">🔥 라운드 및 출석 규칙</h4>
+          <p style="margin: 0; color: var(--text-muted); font-size: 0.88rem;">
+            • 매일 한국표준시(KST) 자정에 새로운 10문제가 출제됩니다.<br>
+            • 이전에 풀지 않은 미풀이 문제가 항상 우선 출제되며, 전체 문제를 풀면 새로운 주기가 시작됩니다.<br>
+            • 모바일 백그라운드 전환이나 화면 꺼짐 시에도 풀던 문제가 자동으로 안전하게 보관됩니다.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification -->
   <div class="toast hidden" id="appToast">알림 메시지</div>
 
   <!-- App Script -->
-  <script src="/js/app.js"></script>
+  <script src="/js/app.js?v=2.1.0"></script>
 </body>
 </html>

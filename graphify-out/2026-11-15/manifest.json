@@ -1,0 +1,105 @@
+{
+  "data/questions.json": {
+    "mtime": 1794556581.1700535,
+    "seen": 1794698468.783419,
+    "ast_hash": "df2a656162bb23798dca7801e532255d",
+    "semantic_hash": "df2a656162bb23798dca7801e532255d",
+    "ast_empty": true
+  },
+  "docker-compose.yml": {
+    "mtime": 1794542460.7900043,
+    "seen": 1794698468.783421,
+    "ast_hash": "b2597c673392a4fef18941370b8349dc",
+    "semantic_hash": "b2597c673392a4fef18941370b8349dc"
+  },
+  "generate_questions.js": {
+    "mtime": 1794542326.844457,
+    "seen": 1794698468.7834592,
+    "ast_hash": "94ac6b07752a7afa4360a9174b58ec44",
+    "semantic_hash": "94ac6b07752a7afa4360a9174b58ec44"
+  },
+  "package.json": {
+    "mtime": 1794642942.2893987,
+    "seen": 1794698468.7834828,
+    "ast_hash": "ccd2f9267819c5d901599c9a259940b6",
+    "semantic_hash": "ccd2f9267819c5d901599c9a259940b6"
+  },
+  "public/js/app.js": {
+    "mtime": 1794642924.9638062,
+    "seen": 1794698468.783506,
+    "ast_hash": "7795da1419d62d216b7cc13fea2146df",
+    "semantic_hash": "7795da1419d62d216b7cc13fea2146df"
+  },
+  "scripts/build_questions.js": {
+    "mtime": 1794556571.8653328,
+    "seen": 1794698468.783535,
+    "ast_hash": "660c09347de6d949bcfcd7730d750f52",
+    "semantic_hash": "660c09347de6d949bcfcd7730d750f52"
+  },
+  "scripts/sub1.js": {
+    "mtime": 1794556400.4669802,
+    "seen": 1794698468.7835588,
+    "ast_hash": "0a33d62c3badc2ac696e4929a375213c",
+    "semantic_hash": "0a33d62c3badc2ac696e4929a375213c"
+  },
+  "scripts/sub2.js": {
+    "mtime": 1794556436.5357356,
+    "seen": 1794698468.7836,
+    "ast_hash": "90294ccb3a257cbf5901b8223c597a34",
+    "semantic_hash": "90294ccb3a257cbf5901b8223c597a34"
+  },
+  "scripts/sub3.js": {
+    "mtime": 1794556475.7826874,
+    "seen": 1794698468.783628,
+    "ast_hash": "5c4bab94cfcd81340bd9525b73c61c16",
+    "semantic_hash": "5c4bab94cfcd81340bd9525b73c61c16"
+  },
+  "scripts/sub4.js": {
+    "mtime": 1794556513.6989076,
+    "seen": 1794698468.783651,
+    "ast_hash": "dd56b132f21b3e618072d82a17cd129b",
+    "semantic_hash": "dd56b132f21b3e618072d82a17cd129b"
+  },
+  "scripts/sub5.js": {
+    "mtime": 1794556567.1025198,
+    "seen": 1794698468.783674,
+    "ast_hash": "0af6dac1778d0260a3728f17a04554ac",
+    "semantic_hash": "0af6dac1778d0260a3728f17a04554ac"
+  },
+  "server.js": {
+    "mtime": 1794642621.9242609,
+    "seen": 1794698468.7836978,
+    "ast_hash": "bef737e7924156177f0242383ff58b8e",
+    "semantic_hash": "bef737e7924156177f0242383ff58b8e"
+  },
+  "tests/audit_logs.test.js": {
+    "mtime": 1794642533.7335975,
+    "seen": 1794698468.78372,
+    "ast_hash": "0e6768fcd62a842a1935e7e459f0730d",
+    "semantic_hash": "0e6768fcd62a842a1935e7e459f0730d"
+  },
+  "tests/frontend_lifecycle.test.js": {
+    "mtime": 1794642654.0918632,
+    "seen": 1794698468.783744,
+    "ast_hash": "d558a0734b75682024dc0ac4bd1c7200",
+    "semantic_hash": "d558a0734b75682024dc0ac4bd1c7200"
+  },
+  "tests/leaderboard_rounds.test.js": {
+    "mtime": 1794642595.6075065,
+    "seen": 1794698468.7837682,
+    "ast_hash": "26ded461e0d4fb57cc136a9b26f35535",
+    "semantic_hash": "26ded461e0d4fb57cc136a9b26f35535"
+  },
+  "tests/questions.test.js": {
+    "mtime": 1794556250.8277116,
+    "seen": 1794698468.783791,
+    "ast_hash": "65cd537924055263245731da790c44d2",
+    "semantic_hash": "65cd537924055263245731da790c44d2"
+  },
+  "tests/server.test.js": {
+    "mtime": 1794556626.4429693,
+    "seen": 1794698468.783823,
+    "ast_hash": "34c419eacc32e13382e95c3515da2b3d",
+    "semantic_hash": "34c419eacc32e13382e95c3515da2b3d"
+  }
+}
