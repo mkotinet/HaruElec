@@ -38,6 +38,9 @@
           <span class="streak-count" id="streakCount">0</span>일 연속
         </div>
 
+        <button class="btn btn-outline-sm hidden" id="adminAuditBtn" style="border-color: #818cf8; color: #818cf8; margin-right: 6px;">
+          🛡️ 관리자 감사
+        </button>
         <div class="user-menu" id="userMenu">
           <button class="btn btn-outline-sm" id="authBtn">로그인</button>
         </div>
@@ -88,6 +91,9 @@
       <button class="mode-tab" data-mode="wrong">
         <span class="tab-icon">📝</span> 오답노트 <span class="badge" id="wrongBadge">0</span>
       </button>
+      <button class="mode-tab" data-mode="leaderboard">
+        <span class="tab-icon">🏆</span> 명예의 전당
+      </button>
       <button class="mode-tab" data-mode="stats">
         <span class="tab-icon">📊</span> 학습 통계
       </button>
@@ -122,7 +128,10 @@
       <div class="quiz-header glass">
         <div class="quiz-progress-wrap">
           <div class="quiz-info-row">
-            <span class="subject-tag" id="currentSubjectTag">제1과목 전기자기학</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="subject-tag" id="currentSubjectTag">제1과목 전기자기학</span>
+              <span class="round-badge hidden" id="quizRoundBadge">🔥 라운드 1</span>
+            </div>
             <span class="question-progress" id="questionProgressText">Q 1 / 10</span>
           </div>
           <div class="progress-bar-bg">
@@ -217,9 +226,45 @@
         </div>
       </div>
 
-      <div class="result-actions">
-        <button class="btn btn-secondary" id="reviewWrongBtn">📝 틀린 문제 복습하기</button>
-        <button class="btn btn-primary" id="restartDailyBtn">🔄 다시 풀기</button>
+      <div class="result-actions" style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+        <button class="btn btn-accent btn-lg hidden" id="nextRoundBtn" style="width: 100%; max-width: 480px;">
+          🎉 100점 만점 통과! 다음 라운드(새 10문제) 도전하기 🔥
+        </button>
+        <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
+          <button class="btn btn-secondary" id="reviewWrongBtn">📝 틀린 문제 복습하기</button>
+          <button class="btn btn-primary" id="restartDailyBtn">🔄 다시 풀기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Leaderboard View -->
+    <section class="leaderboard-container glass hidden" id="leaderboardSection">
+      <div class="leaderboard-header">
+        <div class="lb-title-wrap">
+          <span class="lb-icon">🏆</span>
+          <div>
+            <h2 class="section-title" style="margin-bottom: 2px;">전기기사 랭킹 명예의 전당</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">실제 회원들의 열정적인 도전 순위 (100% 실시간 DB 집계)</p>
+          </div>
+        </div>
+        <button class="btn btn-outline-sm" id="refreshLeaderboardBtn">새로고침 🔄</button>
+      </div>
+
+      <div class="leaderboard-table-wrap">
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th style="width: 60px; text-align: center;">순위</th>
+              <th>학습자</th>
+              <th style="text-align: center;">연속 출석</th>
+              <th style="text-align: center;">오늘 최고 라운드</th>
+              <th style="text-align: right;">누적 점수</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardTableBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -249,6 +294,19 @@
         <h3>과목별 정답률 & 숙련도</h3>
         <div id="subjectMasteryBars">
           <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- User Activity / Access Logs Section -->
+      <div class="user-logs-card glass" style="margin-top: 24px; padding: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="font-size: 1rem; color: var(--text-main); font-weight: 700; display: flex; align-items: center; gap: 6px;">
+            <span>📋</span> 내 최근 접속 및 활동 이력
+          </h3>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">시놀로지 보안 감사 연동 (최근 30건)</span>
+        </div>
+        <div id="userLogsContainer" class="logs-scroll-box">
+          <div style="text-align: center; color: var(--text-muted); padding: 14px;">로그인 시 최근 활동 기록이 표시됩니다.</div>
         </div>
       </div>
     </section>
@@ -283,6 +341,25 @@
           <span id="authToggleText">계정이 없으신가요?</span>
           <button class="btn-link" id="authToggleBtn">회원가입</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Audit Logs Modal (Only for '단민러브') -->
+  <div class="modal-overlay hidden" id="adminAuditModal">
+    <div class="modal-card glass" style="max-width: 720px; width: 92%; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>🛡️</span> 전체 회원 접속 보안 감사 로그 (관리자)
+        </h3>
+        <button class="btn-close" id="closeAdminAuditModal">✕</button>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">시놀로지 NAS 보안 감사 (최대 1,000건 안전 로테이션)</span>
+        <button class="btn btn-outline-sm" id="refreshAdminLogsBtn">새로고침 🔄</button>
+      </div>
+      <div class="admin-logs-scroll-box" id="adminLogsContainer">
+        <div style="text-align: center; color: var(--text-muted); padding: 20px;">감사 로그를 동기화하는 중...</div>
       </div>
     </div>
   </div>

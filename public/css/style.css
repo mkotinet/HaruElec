@@ -1065,3 +1065,214 @@ body {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
+/* ============================================================
+   Round Badge & Consecutive Challenge Button
+   ============================================================ */
+.round-badge {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#nextRoundBtn {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.45);
+  animation: nextRoundPulse 2s infinite ease-in-out;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#nextRoundBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 35px rgba(245, 158, 11, 0.65);
+}
+
+@keyframes nextRoundPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 32px rgba(245, 158, 11, 0.7);
+  }
+}
+
+/* ============================================================
+   Leaderboard View Styles
+   ============================================================ */
+.leaderboard-container {
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.leaderboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 14px;
+}
+
+.lb-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lb-icon {
+  font-size: 2rem;
+}
+
+.leaderboard-table-wrap {
+  overflow-x: auto;
+}
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.leaderboard-table th {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.leaderboard-table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  vertical-align: middle;
+}
+
+.leaderboard-table tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.leaderboard-table tr.my-rank-row {
+  background: rgba(56, 189, 248, 0.12);
+  border-left: 3px solid var(--accent-cyan);
+}
+
+.rank-num-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.rank-medal-1 { background: #fbbf24; color: #0a0e1a; font-size: 1.1rem; }
+.rank-medal-2 { background: #94a3b8; color: #0a0e1a; font-size: 1rem; }
+.rank-medal-3 { background: #d97706; color: #ffffff; font-size: 0.95rem; }
+.rank-medal-other { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
+
+.user-badge-me {
+  background: var(--accent-cyan);
+  color: #0a0e1a;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+  margin-left: 6px;
+}
+
+.user-badge-round {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+/* ============================================================
+   Logs & Audit Modal Styles
+   ============================================================ */
+.logs-scroll-box {
+  max-height: 220px;
+  overflow-y: auto;
+  background: rgba(10, 14, 26, 0.6);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  padding: 8px;
+}
+
+.admin-logs-scroll-box {
+  flex: 1;
+  max-height: 480px;
+  overflow-y: auto;
+  background: rgba(10, 14, 26, 0.85);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  padding: 8px;
+  font-size: 0.8rem;
+}
+
+.log-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 8px;
+}
+
+.log-item-row:last-child {
+  border-bottom: none;
+}
+
+.log-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.log-badge.LOGIN_SUCCESS { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+.log-badge.LOGIN_FAIL { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+.log-badge.REGISTER { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+.log-badge.ROUND_CLEAR { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
+.log-badge.DATA_SYNC { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); }
+.log-badge.QUIZ_FINISH { background: rgba(129, 140, 248, 0.2); color: #a5b4fc; border: 1px solid rgba(129, 140, 248, 0.4); }
+.log-badge.DEFAULT { background: rgba(255, 255, 255, 0.1); color: var(--text-muted); }
+
+.log-meta {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  margin-top: 3px;
+}
+
+.log-time {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-align: right;
+}
+

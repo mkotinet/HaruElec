@@ -209,6 +209,9 @@
         if (data.history) state.history = data.history;
         if (data.streak) state.streak = data.streak;
         if (data.lastAttendance) state.lastAttendance = data.lastAttendance;
+        if (typeof data.totalPoints === "number") state.totalPoints = data.totalPoints;
+        if (typeof data.todayScore === "number") state.todayScore = data.todayScore;
+        if (typeof data.maxRoundToday === "number") state.maxRoundToday = data.maxRoundToday;
         if (data.user) state.user = data.user;
       }
     } catch (e) {
@@ -224,6 +227,9 @@
         history: state.history,
         streak: state.streak,
         lastAttendance: state.lastAttendance,
+        totalPoints: state.totalPoints || 0,
+        todayScore: state.todayScore || 0,
+        maxRoundToday: state.maxRoundToday || 1,
         user: state.user
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -233,7 +239,7 @@
   }
 
   // Cloud Sync API
-  async function syncWithServer() {
+  async function syncWithServer(action = "DATA_SYNC", details = {}) {
     if (!state.user || !state.user.token) return;
     try {
       const res = await fetch("/api/user/sync", {
@@ -247,10 +253,21 @@
           wrongQuestions: Array.from(state.wrongQuestions),
           bookmarks: Array.from(state.bookmarks),
           streak: state.streak,
-          lastAttendance: state.lastAttendance
+          lastAttendance: state.lastAttendance,
+          totalPoints: state.totalPoints || 0,
+          todayScore: state.todayScore || 0,
+          maxRoundToday: state.maxRoundToday || 1,
+          action,
+          details
         })
       });
       if (res.ok) {
+        const body = await res.json();
+        if (body.success && body.user) {
+          if (typeof body.user.totalPoints === "number") state.totalPoints = body.user.totalPoints;
+          if (typeof body.user.maxRoundToday === "number") state.maxRoundToday = body.user.maxRoundToday;
+          saveLocalState();
+        }
         console.log("☁️ Progress synced to cloud server.");
       }
     } catch (e) {
@@ -274,6 +291,15 @@
     DOM.statTodayStatus.textContent = isTodayCompleted ? "완료 ⚡" : "미완료";
     DOM.statTodayStatus.style.color = isTodayCompleted ? "var(--accent-green)" : "var(--accent-elec)";
 
+    const adminAuditBtn = document.getElementById("adminAuditBtn");
+    if (adminAuditBtn) {
+      if (state.user && state.user.username === "단민러브") {
+        adminAuditBtn.classList.remove("hidden");
+      } else {
+        adminAuditBtn.classList.add("hidden");
+      }
+    }
+
     if (state.user) {
       DOM.userMenu.innerHTML = `
         <div class="user-profile">
@@ -294,7 +320,7 @@
       state.currentRound = Math.max(1, parseInt(round, 10) || 1);
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) {
-        roundBadge.textContent = `라운드 ${state.currentRound}`;
+        roundBadge.textContent = `🔥 라운드 ${state.currentRound}`;
         roundBadge.classList.remove("hidden");
       }
       DOM.questionText.textContent = `오늘의 엄선 10문제를 불러오는 중입니다... (라운드 ${state.currentRound})`;
@@ -592,6 +618,8 @@
       DOM.subjectResultsGrid.appendChild(item);
     }
 
+    const nextRoundBtn = document.getElementById("nextRoundBtn");
+
     // Record streak & attendance for daily mode
     if (state.mode === "daily") {
       if (state.lastAttendance !== state.todayDateStr) {
@@ -599,16 +627,46 @@
         state.lastAttendance = state.todayDateStr;
         showToast(`🎉 오늘 출석 번개 도장 완료! (${state.streak}일 연속)`);
       }
+
       state.history.push({
         date: state.todayDateStr,
+        round: state.currentRound,
         score,
         total,
         correctCount,
         timestamp: new Date().toISOString()
       });
-      saveLocalState();
-      syncWithServer();
+
+      if (score === 100) {
+        const bonusPoints = 50;
+        state.totalPoints = (state.totalPoints || 0) + score + bonusPoints;
+        state.todayScore = Math.max(state.todayScore || 0, score);
+        state.maxRoundToday = Math.max(state.maxRoundToday || 1, state.currentRound);
+
+        DOM.resultTitle.textContent = `🎉 라운드 ${state.currentRound} 만점 통과!`;
+        DOM.resultSubtitle.textContent = `10문제를 모두 맞히셨습니다! 다음 라운드에 도전해 실력을 뽐내보세요! 🔥`;
+        if (nextRoundBtn) {
+          nextRoundBtn.textContent = `🎉 100점 만점 통과! 라운드 ${state.currentRound + 1} (새 10문제) 도전하기 🔥 (+50P 보너스!)`;
+          nextRoundBtn.classList.remove("hidden");
+        }
+
+        saveLocalState();
+        syncWithServer("ROUND_CLEAR", { round: state.currentRound, score: 100 });
+        showToast(`🎉 라운드 ${state.currentRound} 100점 만점 돌파! (+${score + bonusPoints}P)`);
+      } else {
+        state.totalPoints = (state.totalPoints || 0) + score;
+        state.todayScore = Math.max(state.todayScore || 0, score);
+        DOM.resultTitle.textContent = "오늘의 10문제 완료!";
+        DOM.resultSubtitle.textContent = "수고하셨습니다. 매일 10문제가 합격을 만듭니다.";
+        if (nextRoundBtn) nextRoundBtn.classList.add("hidden");
+
+        saveLocalState();
+        syncWithServer("QUIZ_FINISH", { round: state.currentRound, score });
+      }
+
       updateDashboardStats();
+    } else {
+      if (nextRoundBtn) nextRoundBtn.classList.add("hidden");
     }
 
     DOM.quizSection.classList.add("hidden");
@@ -624,12 +682,26 @@
 
     DOM.resultSection.classList.add("hidden");
 
+    const leaderboardSection = document.getElementById("leaderboardSection");
+    if (leaderboardSection) leaderboardSection.classList.add("hidden");
+
+    if (newMode === "leaderboard") {
+      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
+      DOM.quizSection.classList.add("hidden");
+      DOM.statsSection.classList.add("hidden");
+      if (leaderboardSection) leaderboardSection.classList.remove("hidden");
+      loadLeaderboard();
+      return;
+    }
+
     if (newMode === "stats") {
       DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       DOM.quizSection.classList.add("hidden");
       DOM.statsSection.classList.remove("hidden");
       renderStatsView();
+      loadUserLogs();
       return;
     }
 
@@ -639,16 +711,22 @@
     if (newMode === "daily") {
       DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
-      loadDailyQuestions();
+      loadDailyQuestions(state.currentRound || 1);
     } else if (newMode === "practice") {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.remove("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadPracticeQuestions(state.subjectId);
     } else if (newMode === "kec") {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadKecQuestions();
     } else if (newMode === "search") {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.remove("hidden");
       if (DOM.searchInput.value.trim()) {
@@ -657,6 +735,8 @@
         DOM.searchInput.focus();
       }
     } else if (newMode === "wrong") {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadWrongQuestions();
@@ -775,12 +855,205 @@
     showToast("로그아웃 되었습니다.");
   }
 
+  // Real-time Leaderboard View
+  async function loadLeaderboard() {
+    const tableBody = document.getElementById("leaderboardTableBody");
+    if (!tableBody) return;
+
+    tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">실시간 랭킹을 집계 중입니다...</td></tr>`;
+
+    try {
+      const res = await fetch("/api/leaderboard");
+      if (!res.ok) throw new Error("Leaderboard fetch failed");
+      const data = await res.json();
+      const list = data.leaderboard || [];
+
+      if (list.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">아직 등록된 랭킹 데이터가 없습니다. 첫 10문제에 도전해 보세요!</td></tr>`;
+        return;
+      }
+
+      tableBody.innerHTML = list.map((user, idx) => {
+        const rank = idx + 1;
+        const medalClass = rank === 1 ? "rank-medal-1" : rank === 2 ? "rank-medal-2" : rank === 3 ? "rank-medal-3" : "rank-medal-other";
+        const medalText = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank;
+        const isMe = state.user && (state.user.username === user.username || state.user.nickname === user.nickname);
+        const meTag = isMe ? `<span class="user-badge-me">나</span>` : "";
+        const roundBadge = user.maxRoundToday && user.maxRoundToday > 1
+          ? `<span class="user-badge-round">🔥 ${user.maxRoundToday}R</span>`
+          : `<span style="color: var(--text-dim); font-size: 0.8rem;">1R</span>`;
+
+        return `
+          <tr class="${isMe ? "my-rank-row" : ""}">
+            <td style="text-align: center;">
+              <span class="rank-num-badge ${medalClass}">${medalText}</span>
+            </td>
+            <td>
+              <strong style="color: var(--text-main); font-size: 0.95rem;">${user.nickname || user.username}</strong>
+              ${meTag}
+            </td>
+            <td style="text-align: center; color: var(--accent-elec); font-weight: 700;">
+              ${user.streak || 0}일 🔥
+            </td>
+            <td style="text-align: center;">
+              ${roundBadge}
+            </td>
+            <td style="text-align: right; font-weight: 800; color: var(--accent-cyan); font-family: var(--font-mono);">
+              ${(user.totalPoints || 0).toLocaleString()} P
+            </td>
+          </tr>
+        `;
+      }).join("");
+    } catch (e) {
+      tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--accent-red);">랭킹 정보를 불러오지 못했습니다. 네트워크를 확인해 주세요.</td></tr>`;
+    }
+  }
+
+  // User Activity & Access Logs (last 30 logs)
+  async function loadUserLogs() {
+    const container = document.getElementById("userLogsContainer");
+    if (!container) return;
+
+    if (!state.user || !state.user.token) {
+      container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 14px;">로그인 시 최근 활동 기록이 표시됩니다.</div>`;
+      return;
+    }
+
+    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 14px;">활동 이력을 불러오는 중...</div>`;
+
+    try {
+      const res = await fetch("/api/user/logs", {
+        headers: { "Authorization": `Bearer ${state.user.token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const logs = data.logs || [];
+        if (logs.length === 0) {
+          container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 14px;">기록된 활동 이력이 없습니다.</div>`;
+          return;
+        }
+        container.innerHTML = logs.map(l => {
+          const badgeClass = l.action || "DEFAULT";
+          const actionText = l.action === "LOGIN_SUCCESS" ? "로그인 성공"
+            : l.action === "LOGIN_FAIL" ? "로그인 실패"
+            : l.action === "REGISTER" ? "회원가입"
+            : l.action === "ROUND_CLEAR" ? `라운드 클리어 (${l.details && l.details.round ? l.details.round + "R" : ""})`
+            : l.action === "DATA_SYNC" ? "학습 동기화"
+            : "활동 기록";
+
+          return `
+            <div class="log-item-row">
+              <div>
+                <span class="log-badge ${badgeClass}">${actionText}</span>
+                <div class="log-meta">IP: ${l.ip || "-"}</div>
+              </div>
+              <div class="log-time">${l.kstTime || l.timestamp || ""}</div>
+            </div>
+          `;
+        }).join("");
+      } else {
+        container.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 14px;">활동 이력을 불러오지 못했습니다.</div>`;
+      }
+    } catch (e) {
+      container.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 14px;">서버와 통신할 수 없습니다.</div>`;
+    }
+  }
+
+  // Admin Audit Logs Modal (Only for '단민러브')
+  async function loadAdminLogs() {
+    const container = document.getElementById("adminLogsContainer");
+    if (!container) return;
+
+    if (!state.user || state.user.username !== "단민러브") {
+      container.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 20px;">관리자 전용 기능입니다.</div>`;
+      return;
+    }
+
+    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">시놀로지 NAS 감사 로그 동기화 중...</div>`;
+
+    try {
+      const res = await fetch("/api/admin/logs", {
+        headers: { "Authorization": `Bearer ${state.user.token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const logs = data.logs || [];
+        if (logs.length === 0) {
+          container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">저장된 보안 감사 로그가 없습니다.</div>`;
+          return;
+        }
+
+        container.innerHTML = logs.map(l => {
+          const badgeClass = l.action || "DEFAULT";
+          const actionText = l.action === "LOGIN_SUCCESS" ? "로그인 성공"
+            : l.action === "LOGIN_FAIL" ? "로그인 실패"
+            : l.action === "REGISTER" ? "회원가입"
+            : l.action === "ROUND_CLEAR" ? `라운드 클리어 (${l.details && l.details.round ? l.details.round + "R" : ""})`
+            : l.action === "DATA_SYNC" ? "동기화"
+            : "활동";
+
+          return `
+            <div class="log-item-row" style="padding: 10px 12px;">
+              <div>
+                <strong style="color: var(--text-main); font-size: 0.9rem;">${l.username || "비회원"}</strong>
+                <span class="log-badge ${badgeClass}" style="margin-left: 6px;">${actionText}</span>
+                <div class="log-meta">IP: ${l.ip || "-"} · ${l.userAgent ? l.userAgent.substring(0, 45) + "..." : "-"}</div>
+              </div>
+              <div class="log-time" style="font-family: var(--font-mono);">${l.kstTime || l.timestamp || ""}</div>
+            </div>
+          `;
+        }).join("");
+      } else {
+        container.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 20px;">감사 로그 조회 권한이 없거나 에러가 발생했습니다. (403 Forbidden)</div>`;
+      }
+    } catch (e) {
+      container.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 20px;">서버와 통신할 수 없습니다.</div>`;
+    }
+  }
+
   // Setup Event Listeners
   function initEvents() {
     // Mode tabs
     DOM.modeTabs.forEach(tab => {
       tab.addEventListener("click", () => switchMode(tab.dataset.mode));
     });
+
+    // Leaderboard refresh
+    const refreshLeaderboardBtn = document.getElementById("refreshLeaderboardBtn");
+    if (refreshLeaderboardBtn) {
+      refreshLeaderboardBtn.addEventListener("click", () => loadLeaderboard());
+    }
+
+    // Admin Audit Modal Controls
+    const adminAuditBtn = document.getElementById("adminAuditBtn");
+    const adminAuditModal = document.getElementById("adminAuditModal");
+    const closeAdminAuditModal = document.getElementById("closeAdminAuditModal");
+    const refreshAdminLogsBtn = document.getElementById("refreshAdminLogsBtn");
+
+    if (adminAuditBtn && adminAuditModal) {
+      adminAuditBtn.addEventListener("click", () => {
+        adminAuditModal.classList.remove("hidden");
+        loadAdminLogs();
+      });
+    }
+    if (closeAdminAuditModal && adminAuditModal) {
+      closeAdminAuditModal.addEventListener("click", () => {
+        adminAuditModal.classList.add("hidden");
+      });
+    }
+    if (refreshAdminLogsBtn) {
+      refreshAdminLogsBtn.addEventListener("click", () => loadAdminLogs());
+    }
+
+    // Next Consecutive Round Button
+    const nextRoundBtn = document.getElementById("nextRoundBtn");
+    if (nextRoundBtn) {
+      nextRoundBtn.addEventListener("click", () => {
+        state.currentRound = (state.currentRound || 1) + 1;
+        switchMode("daily");
+        loadDailyQuestions(state.currentRound);
+      });
+    }
 
     // Practice Subject filters
     DOM.filterBtns.forEach(btn => {
