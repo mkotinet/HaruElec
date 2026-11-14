@@ -5,10 +5,46 @@
 (function () {
   "use strict";
 
+  // KST Date Helper
+  function getKSTDateString(dateObj = new Date()) {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      return formatter.format(dateObj);
+    } catch (e) {
+      const now = dateObj || new Date();
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const kst = new Date(utc + (9 * 60 * 60000));
+      return kst.toISOString().split("T")[0];
+    }
+  }
+
+  // Dynamic Option Shuffle (Fisher-Yates) to eliminate answer position bias
+  function shuffleQuestionOptions(q) {
+    if (!q || !Array.isArray(q.options) || q.options.length < 2) return q;
+    const originalAnswerText = q.options[q.answer - 1];
+    const shuffled = [...q.options];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const newAnswerIndex = shuffled.indexOf(originalAnswerText) + 1; // 1-based index (1~4)
+    return {
+      ...q,
+      options: shuffled,
+      answer: newAnswerIndex
+    };
+  }
+
   // State
   const state = {
-    mode: "daily", // daily | practice | wrong | stats
+    mode: "daily", // daily | practice | kec | search | leaderboard | wrong | stats
     subjectId: 0,
+    currentRound: 1,
     questions: [],
     currentIndex: 0,
     userAnswers: {}, // { [qId]: selectedOption (1~4) }
@@ -16,9 +52,13 @@
     bookmarks: new Set(),
     history: [],
     streak: 0,
+    totalPoints: 0,
+    todayScore: 0,
+    maxRoundToday: 1,
     lastAttendance: "",
     user: null, // { username, nickname, token }
-    todayDateStr: new Date().toISOString().slice(0, 10),
+    todayDateStr: getKSTDateString(),
+    lastLoadedDate: getKSTDateString(),
     authMode: "login" // login | register
   };
 
@@ -249,12 +289,19 @@
   }
 
   // Load Daily Questions
-  async function loadDailyQuestions() {
+  async function loadDailyQuestions(round = 1) {
     try {
-      DOM.questionText.textContent = "오늘의 엄선 10문제를 불러오는 중입니다...";
-      const res = await fetch(`/api/questions/daily?date=${state.todayDateStr}`);
+      state.currentRound = Math.max(1, parseInt(round, 10) || 1);
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) {
+        roundBadge.textContent = `라운드 ${state.currentRound}`;
+        roundBadge.classList.remove("hidden");
+      }
+      DOM.questionText.textContent = `오늘의 엄선 10문제를 불러오는 중입니다... (라운드 ${state.currentRound})`;
+      const res = await fetch(`/api/questions/daily?date=${state.todayDateStr}&round=${state.currentRound}`);
       const data = await res.json();
-      state.questions = data.questions || [];
+      const rawList = data.questions || [];
+      state.questions = rawList.map(q => shuffleQuestionOptions(q));
       state.currentIndex = 0;
       state.userAnswers = {};
       renderQuestion();
@@ -266,10 +313,13 @@
   // Load Practice Questions
   async function loadPracticeQuestions(subjectId = 0) {
     try {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
       DOM.questionText.textContent = "연습문제를 불러오는 중입니다...";
       const res = await fetch(`/api/questions/practice?subject=${subjectId}&count=10`);
       const data = await res.json();
-      state.questions = data.questions || [];
+      const rawList = data.questions || [];
+      state.questions = rawList.map(q => shuffleQuestionOptions(q));
       state.currentIndex = 0;
       state.userAnswers = {};
       renderQuestion();
@@ -281,10 +331,13 @@
   // Load KEC Focus Questions
   async function loadKecQuestions() {
     try {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
       DOM.questionText.textContent = "KEC 최신 개정 집중 특강 문제를 불러오는 중입니다...";
       const res = await fetch(`/api/questions/kec`);
       const data = await res.json();
-      state.questions = data.questions || [];
+      const rawList = data.questions || [];
+      state.questions = rawList.map(q => shuffleQuestionOptions(q));
       state.currentIndex = 0;
       state.userAnswers = {};
       renderQuestion();
@@ -302,6 +355,8 @@
       return;
     }
     try {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
       DOM.searchInfoText.textContent = `'${trimmed}' 검색 중...`;
       const res = await fetch(`/api/questions/search?q=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
@@ -312,7 +367,7 @@
         return;
       }
       DOM.searchInfoText.textContent = `'${trimmed}' 검색 완료: 총 ${results.length}개의 관련 문제가 발견되었습니다.`;
-      state.questions = results;
+      state.questions = results.map(q => shuffleQuestionOptions(q));
       state.currentIndex = 0;
       state.userAnswers = {};
       renderQuestion();
@@ -331,17 +386,38 @@
     }
 
     try {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
       DOM.questionText.textContent = "오답노트 문제를 준비하는 중입니다...";
       const res = await fetch("/api/questions/practice?subject=0&count=60");
       const data = await res.json();
       const all = data.questions || [];
-      state.questions = all.filter(q => state.wrongQuestions.has(q.id));
+      state.questions = all.filter(q => state.wrongQuestions.has(q.id)).map(q => shuffleQuestionOptions(q));
       state.currentIndex = 0;
       state.userAnswers = {};
       renderQuestion();
     } catch (e) {
       DOM.questionText.textContent = "오답노트를 불러오지 못했습니다.";
     }
+  }
+
+  // Check Mobile Lifecycle Date Rollover
+  function checkDateTransition(overrideDateStr) {
+    const todayStr = overrideDateStr || getKSTDateString();
+    if (state.lastLoadedDate && todayStr !== state.lastLoadedDate) {
+      console.log(`[HaruElec] Date transitioned: ${state.lastLoadedDate} -> ${todayStr}`);
+      state.lastLoadedDate = todayStr;
+      state.todayDateStr = todayStr;
+      if (DOM.todayDateTag) {
+        DOM.todayDateTag.textContent = `📅 ${todayStr.replace(/-/g, ". ")}`;
+      }
+      state.currentRound = 1;
+      state.userAnswers = {};
+      switchMode("daily");
+      showToast("새로운 하루가 밝았습니다! ⚡ 오늘의 10문제가 갱신되었습니다.");
+      return true;
+    }
+    return false;
   }
 
   // Render Current Question
@@ -776,17 +852,23 @@
         }
       });
     }
+
+    // Mobile Lifecycle & Midnight Rollover
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        checkDateTransition();
+      }
+    });
+    window.addEventListener("pageshow", () => checkDateTransition());
+    window.addEventListener("focus", () => checkDateTransition());
+    setInterval(() => checkDateTransition(), 60000);
   }
 
   // Initialize Application
   function init() {
-    // Set formatted date
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    state.todayDateStr = `${y}-${m}-${d}`;
-    DOM.todayDateTag.textContent = `📅 ${y}. ${m}. ${d}`;
+    state.todayDateStr = getKSTDateString();
+    state.lastLoadedDate = state.todayDateStr;
+    DOM.todayDateTag.textContent = `📅 ${state.todayDateStr.replace(/-/g, ". ")}`;
 
     loadLocalState();
     initEvents();
@@ -795,4 +877,13 @@
   }
 
   document.addEventListener("DOMContentLoaded", init);
+
+  // Export for testing in Node.js
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      getKSTDateString,
+      shuffleQuestionOptions,
+      checkDateTransition
+    };
+  }
 })();
