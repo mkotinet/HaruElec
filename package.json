@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/questions.test.js && node tests/server.test.js"
+    "test": "node tests/questions.test.js && node tests/server.test.js && node tests/audit_logs.test.js && node tests/leaderboard_rounds.test.js && node tests/frontend_lifecycle.test.js"
   },
   "keywords": ["전기기사", "문제은행", "CBT", "하루10문제"],
   "author": "mkotinet",
