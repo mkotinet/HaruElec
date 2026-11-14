@@ -7,18 +7,47 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const { execSync } = require("child_process");
 
 const PORT = parseInt(process.env.PORT || "80", 10);
-const DATA_DIR = path.join(__dirname, "data");
+const PERSISTENT_DIR = "/app/data";
+const DATA_DIR = (fs.existsSync(PERSISTENT_DIR) && process.env.NODE_ENV !== "test") ? PERSISTENT_DIR : path.join(__dirname, "data");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DB_FILE = path.join(DATA_DIR, "users.json");
 const LOGS_FILE = path.join(DATA_DIR, "access_logs.json");
-const QUESTIONS_FILE = path.join(DATA_DIR, "questions.json");
+const QUESTIONS_FILE = path.join(__dirname, "data", "questions.json");
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// Ensure data directory exists and bootstrap if in persistent container mode
+if (DATA_DIR === PERSISTENT_DIR) {
+  if (!fs.existsSync(PERSISTENT_DIR)) {
+    fs.mkdirSync(PERSISTENT_DIR, { recursive: true });
+  }
+  const fallbackDir = path.join(__dirname, "data");
+  const srcUsers = path.join(fallbackDir, "users.json");
+  const targetUsers = path.join(DATA_DIR, "users.json");
+  if (!fs.existsSync(targetUsers) && fs.existsSync(srcUsers)) {
+    try {
+      fs.copyFileSync(srcUsers, targetUsers);
+      console.log("[Persistence] Bootstrapped users.json into /app/data");
+    } catch (e) {
+      console.error("Failed to bootstrap users.json:", e);
+    }
+  }
+  const srcLogs = path.join(fallbackDir, "access_logs.json");
+  const targetLogs = path.join(DATA_DIR, "access_logs.json");
+  if (!fs.existsSync(targetLogs) && fs.existsSync(srcLogs)) {
+    try {
+      fs.copyFileSync(srcLogs, targetLogs);
+      console.log("[Persistence] Bootstrapped access_logs.json into /app/data");
+    } catch (e) {
+      console.error("Failed to bootstrap access_logs.json:", e);
+    }
+  }
+} else {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
 }
 
 // Load questions bank
@@ -353,6 +382,9 @@ function createServerHandler() {
             totalPoints: 0,
             todayScore: 0,
             maxRoundToday: 1,
+            shieldCount: 0,
+            items: { eraser5050: 2, heart: 2, booster2x: 2 },
+            solvedQuestionIds: [],
             lastAttendance: "",
             history: [],
             wrongQuestions: [],
@@ -442,14 +474,46 @@ function createServerHandler() {
           if (body.lastAttendance) {
             user.lastAttendance = body.lastAttendance;
           }
+          if (Array.isArray(body.solvedQuestionIds)) {
+            const set = new Set(user.solvedQuestionIds || []);
+            body.solvedQuestionIds.forEach(id => set.add(id));
+            user.solvedQuestionIds = Array.from(set);
+          }
+          if (typeof body.shieldCount === "number") {
+            user.shieldCount = Math.max(0, Math.min(2, body.shieldCount));
+          }
+          if (body.items && typeof body.items === "object") {
+            user.items = {
+              eraser5050: typeof body.items.eraser5050 === "number" ? body.items.eraser5050 : (user.items?.eraser5050 || 2),
+              heart: typeof body.items.heart === "number" ? body.items.heart : (user.items?.heart || 2),
+              booster2x: typeof body.items.booster2x === "number" ? body.items.booster2x : (user.items?.booster2x || 2)
+            };
+          }
 
           saveDB(db);
 
           const action = body.action || "DATA_SYNC";
           recordAccessLog(auth.username, action, clientIp, userAgent, body.details || {});
 
+          const safeUser = {
+            username: user.username,
+            nickname: user.nickname,
+            streak: user.streak,
+            totalPoints: user.totalPoints || 0,
+            todayScore: user.todayScore || 0,
+            maxRoundToday: user.maxRoundToday || 1,
+            lastAttendance: user.lastAttendance,
+            wrongQuestions: user.wrongQuestions,
+            bookmarks: user.bookmarks,
+            solvedQuestionIds: user.solvedQuestionIds || [],
+            shieldCount: user.shieldCount || 0,
+            items: user.items || { eraser5050: 2, heart: 2, booster2x: 2 }
+          };
+
           return sendJSON(res, 200, {
+            success: true,
             message: "동기화 완료",
+            user: safeUser,
             streak: user.streak,
             totalPoints: user.totalPoints || 0,
             maxRoundToday: user.maxRoundToday || 1,
@@ -546,6 +610,31 @@ function createServerHandler() {
         }
       }
 
+      // 10. App Version & Mobile Auto-Update Check
+      if (pathname === "/api/version" && req.method === "GET") {
+        let verData = { version: "2.1.0", build: "20261115_0820" };
+        try {
+          const vFile = path.join(__dirname, "version.json");
+          if (fs.existsSync(vFile)) {
+            verData = JSON.parse(fs.readFileSync(vFile, "utf8"));
+          }
+        } catch (e) {}
+
+        try {
+          const commit = execSync("git rev-parse --short HEAD", { timeout: 1000 }).toString().trim();
+          if (commit) verData.commit = commit;
+        } catch (e) {}
+
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+        return sendJSON(res, 200, {
+          success: true,
+          ...verData,
+          serverTime: new Date().toISOString()
+        });
+      }
+
       return sendJSON(res, 404, { error: "API 엔드포인트를 찾을 수 없습니다." });
     }
 
@@ -566,7 +655,10 @@ function createServerHandler() {
         // Fallback to index.html for SPA if not found
         const fallbackPath = path.join(PUBLIC_DIR, "index.html");
         if (fs.existsSync(fallbackPath)) {
-          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          res.writeHead(200, {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-cache, must-revalidate"
+          });
           fs.createReadStream(fallbackPath).pipe(res);
           return;
         }
@@ -577,8 +669,28 @@ function createServerHandler() {
 
       const ext = path.extname(filePath).toLowerCase();
       const contentType = MIME_TYPES[ext] || "application/octet-stream";
-      res.writeHead(200, { "Content-Type": contentType });
-      fs.createReadStream(filePath).pipe(res);
+      const acceptEncoding = req.headers["accept-encoding"] || "";
+      const shouldGzip = /\bgzip\b/.test(acceptEncoding) && (ext === ".js" || ext === ".css" || ext === ".html" || ext === ".json");
+      const isVersioned = (ext === ".js" || ext === ".css") && (req.url && req.url.includes("?v="));
+      const isVersionJson = path.basename(filePath) === "version.json";
+
+      const headers = {
+        "Content-Type": contentType,
+        "Cache-Control": isVersionJson
+          ? "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+          : (isVersioned
+            ? "public, max-age=31536000, immutable"
+            : ((ext === ".html" || ext === ".js" || ext === ".css") ? "no-cache, must-revalidate" : "public, max-age=3600"))
+      };
+
+      if (shouldGzip) {
+        headers["Content-Encoding"] = "gzip";
+        res.writeHead(200, headers);
+        fs.createReadStream(filePath).pipe(zlib.createGzip()).pipe(res);
+      } else {
+        res.writeHead(200, headers);
+        fs.createReadStream(filePath).pipe(res);
+      }
     });
   };
 }
