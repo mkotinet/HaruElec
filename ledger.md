@@ -9,4 +9,4 @@
 - [x] Task 2: Consecutive Rounds & Real-time Leaderboard in Backend (`server.js`, `tests/leaderboard_rounds.test.js`)
 - [x] Task 3: Dynamic Choice Randomization & Mobile Lifecycle in Frontend (`public/js/app.js`, `tests/frontend_lifecycle.test.js`)
 - [x] Task 4: UI Components for Consecutive Rounds, Leaderboard, Audit Logs & Admin (`public/index.html`, `public/css/style.css`, `public/js/app.js`)
-- [ ] Task 5: Integration Verification, Container Restart, Documentation & Git Sync
+- [x] Task 5: Integration Verification, Container Restart, Documentation & Git Sync
