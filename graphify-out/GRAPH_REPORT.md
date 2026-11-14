@@ -1,7 +1,7 @@
 # Graph Report - HaruElec  (2026-11-15)
 
 ## Corpus Check
-- 23 files · ~55,504 words
+- 23 files · ~56,803 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 2 file(s) not represented in the graph (top: (none) 1, .css 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b6090a5e`
+- Built from commit: `38cc7061`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -34,22 +34,22 @@
 4. `updateItemUI()` - 13 edges
 5. `init()` - 12 edges
 6. `saveActiveQuizSession()` - 12 edges
-7. `saveLocalState()` - 11 edges
-8. `finishQuiz()` - 11 edges
+7. `finishQuiz()` - 11 edges
+8. `saveLocalState()` - 11 edges
 9. `switchMode()` - 11 edges
-10. `loadDailyQuestions()` - 10 edges
+10. `startServer()` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `runTests()` --calls--> `selectUnsolvedFirstQuestions()`  [EXTRACTED]
-  tests/unsolved_priority.test.js → public/js/app.js
 - `runTests()` --calls--> `saveActiveQuizSession()`  [EXTRACTED]
   tests/quiz_session_persistence.test.js → public/js/app.js
-- `runTests()` --calls--> `getKSTDateString()`  [EXTRACTED]
-  tests/quiz_session_persistence.test.js → public/js/app.js
-- `runTests()` --calls--> `restoreActiveQuizSession()`  [EXTRACTED]
-  tests/quiz_session_persistence.test.js → public/js/app.js
-- `runTests()` --calls--> `awardShieldForConsecutivePerfect()`  [EXTRACTED]
-  tests/gamification_shield.test.js → public/js/app.js
+- `runTests()` --calls--> `selectUnsolvedFirstQuestions()`  [EXTRACTED]
+  tests/unsolved_priority.test.js → public/js/app.js
+- `runTests()` --calls--> `startServer()`  [EXTRACTED]
+  tests/audit_logs.test.js → server.js
+- `runTests()` --calls--> `startServer()`  [EXTRACTED]
+  tests/leaderboard_rounds.test.js → server.js
+- `runTests()` --calls--> `startServer()`  [EXTRACTED]
+  tests/persistent_auth.test.js → server.js
 
 ## Import Cycles
 - None detected.

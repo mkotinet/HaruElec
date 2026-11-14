@@ -287,7 +287,7 @@ function createServerHandler() {
         return sendJSON(res, 200, {
           status: "ok",
           service: "HaruElec",
-          version: "1.0.0",
+          version: "2.1.0",
           questionsLoaded: QUESTIONS.length,
           timestamp: new Date().toISOString()
         });

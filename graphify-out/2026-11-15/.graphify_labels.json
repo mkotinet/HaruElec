@@ -1,1 +1,8 @@
-{"0": "server.js", "1": "app.js", "2": "frontend_lifecycle.test.js", "3": "audit_logs.test.js", "4": "haruelec", "5": "package.json", "6": "build_questions.js"}
+{
+  "0": "server.js",
+  "1": "app.js",
+  "2": "frontend_lifecycle.test.js",
+  "3": "audit_logs.test.js",
+  "4": "haruelec",
+  "5": "package.json"
+}

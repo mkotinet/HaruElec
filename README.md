@@ -3,6 +3,7 @@
 > **매일 10문제로 완성하는 전기기사 필기 시험 데일리 퀴즈 & KEC 최신 개정판 대조 분석, 스마트 오답노트 웹 애플리케이션**
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github)](https://github.com/mkotinet/HaruElec)
+[![Version: 2.1.0](https://img.shields.io/badge/version-2.1.0-amber.svg?style=for-the-badge)](version.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=for-the-badge&logo=docker)](docker-compose.yml)
@@ -57,6 +58,25 @@
 ### 10. 🛡️ 시놀로지 NAS 보안 접속 감사 로깅 & 관리자 RBAC (v2.0 New)
 - 회원가입, 로그인, 라운드 클리어 등 주요 활동을 KST 표준시, 클라이언트 IP, User-Agent와 함께 안전하게 로테이션 로깅합니다.
 - 사이트 대표 관리자(`단민러브`) 전용 감사 로그 대시보드 모달을 제공하여 시스템 무결성을 안전하게 관리합니다.
+
+### 11. 🛡️ 방패(Shield) 수호 시스템 & 의사결정 박스 (v2.1.0 New)
+- 2연속 100점 만점 통과 시 방패 1개를 지급하며, 최대 2개 상한선(`Math.min(2, ...)`)이 엄격히 적용됩니다.
+- 3연속 만점 신화 달성 시 특별 보너스 **+300P**가 지급됩니다.
+- 라운드 탈락 위기 시 `#shieldDecisionBox`를 통해 방패를 소모하여 다음 라운드로 진출할지, 아니면 방패를 아끼고 오답 복습 모드로 전환할지 수험생이 직접 전략적으로 결정합니다.
+
+### 12. ⚡ 3종 전기 퀴즈 찬스 아이템 (v2.1.0 New)
+- **⚡ 50:50 전력 차단** (`eraser5050`): 현재 문제의 오답 보기 2개를 즉시 비활성화하여 정답 확률을 높입니다.
+- **💖 절연 보호** (`heart`): 오답 선택 시 1회 면제되어 다른 보기를 다시 선택할 수 있는 기회를 부여합니다.
+- **🚀 2배 부스터** (`booster2x`): 해당 라운드에서 획득하는 모든 점수가 2배로 적립됩니다.
+
+### 13. 🎯 미풀이 문제 우선 출제 엔진 (v2.1.0 New)
+- 수험생이 이미 푼 문제 ID를 추적하여 이전에 풀지 않은 미풀이 문제를 100% 우선 선별 출제합니다.
+- 125제 전체를 풀이 완료하면 사이클이 자동 리셋되며, 매 출제 시 10문항 전체에 Fisher-Yates 무작위 셔플이 적용됩니다.
+
+### 14. 📱 모바일 멀티태스킹 퀴즈 세션 영속성 & 자동 버전 갱신 (v2.1.0 New)
+- 풀이 도중 카카오톡 확인이나 화면 꺼짐 시에도 퀴즈 상태가 실시간 직렬화되어 보존되며, 홈 화면의 `[⚡ 풀던 10문제 이어하기]` 배너로 즉시 복원됩니다.
+- 5대 브라우저 라이프사이클 훅(`visibilitychange`, `pageshow`, `focus`, `online`, 주기적 타이머)을 통해 서버의 최신 배포를 실시간 감지하여 자동 갱신합니다.
+- First-Touch 제스처를 통한 Web Audio API 오디오 자동 언락 및 모바일 헤더 텍스트 줄바꿈 방지 스타일이 적용되었습니다.
 
 ---
 
