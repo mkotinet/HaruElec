@@ -13,6 +13,7 @@ const PORT = parseInt(process.env.PORT || "80", 10);
 const DATA_DIR = path.join(__dirname, "data");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DB_FILE = path.join(DATA_DIR, "users.json");
+const LOGS_FILE = path.join(DATA_DIR, "access_logs.json");
 const QUESTIONS_FILE = path.join(DATA_DIR, "questions.json");
 
 // Ensure data directory exists
@@ -48,6 +49,76 @@ function saveDB(db) {
   } catch (e) {
     console.error("DB Save Error:", e);
   }
+}
+
+// Access Logs helper (Max 1,000 entries rotation)
+function loadLogs() {
+  try {
+    if (fs.existsSync(LOGS_FILE)) {
+      return JSON.parse(fs.readFileSync(LOGS_FILE, "utf8"));
+    }
+  } catch (e) {
+    console.error("Logs Load Error:", e);
+  }
+  return [];
+}
+
+function saveLogs(logs) {
+  try {
+    const trimmed = logs.slice(-1000);
+    fs.writeFileSync(LOGS_FILE, JSON.stringify(trimmed, null, 2), "utf8");
+  } catch (e) {
+    console.error("Logs Save Error:", e);
+  }
+}
+
+function getKSTTime() {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const kst = new Date(utc + (9 * 60 * 60000));
+  return kst.toISOString().replace(/T/, " ").replace(/\..+/, "");
+}
+
+function getKSTDateString(dateObj = new Date()) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(dateObj);
+  } catch (e) {
+    const now = dateObj || new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const kst = new Date(utc + (9 * 60 * 60000));
+    return kst.toISOString().split("T")[0];
+  }
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket ? (req.socket.remoteAddress || "").replace(/^.*:/, "") : "-";
+}
+
+function recordAccessLog(username, action, ip, userAgent, details = {}) {
+  const logs = loadLogs();
+  const entry = {
+    id: "log_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+    timestamp: new Date().toISOString(),
+    kstTime: getKSTTime(),
+    username: username || "게스트",
+    action: action, // REGISTER, LOGIN_SUCCESS, LOGIN_FAIL, ROUND_CLEAR, DATA_SYNC
+    ip: ip || "-",
+    userAgent: (userAgent || "-").substring(0, 200),
+    details: details
+  };
+  logs.push(entry);
+  saveLogs(logs);
+  return entry;
 }
 
 function hashPassword(password) {
@@ -155,6 +226,8 @@ function createServerHandler() {
   return async function handler(req, res) {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     const pathname = parsedUrl.pathname;
+    const clientIp = getClientIp(req);
+    const userAgent = req.headers["user-agent"] || "-";
 
     // CORS preflight
     if (req.method === "OPTIONS") {
@@ -255,27 +328,33 @@ function createServerHandler() {
           if (!username || !password) {
             return sendJSON(res, 400, { error: "아이디와 비밀번호를 입력해주세요." });
           }
-          if (db.users[username]) {
+          const trimmedUser = username.trim();
+          if (db.users[trimmedUser]) {
             return sendJSON(res, 409, { error: "이미 존재하는 아이디입니다." });
           }
 
           const passwordHash = hashPassword(password);
           const token = generateToken();
           const newUser = {
-            username,
-            nickname: nickname || username,
+            username: trimmedUser,
+            nickname: (nickname || trimmedUser).trim(),
             passwordHash,
             createdAt: new Date().toISOString(),
             streak: 0,
+            totalPoints: 0,
+            todayScore: 0,
+            maxRoundToday: 1,
             lastAttendance: "",
             history: [],
             wrongQuestions: [],
             bookmarks: []
           };
 
-          db.users[username] = newUser;
-          db.tokens[token] = username;
+          db.users[trimmedUser] = newUser;
+          db.tokens[token] = trimmedUser;
           saveDB(db);
+
+          recordAccessLog(trimmedUser, "REGISTER", clientIp, userAgent, { nickname: newUser.nickname });
 
           const { passwordHash: _, ...safeUser } = newUser;
           return sendJSON(res, 200, { message: "회원가입 완료", token, user: safeUser });
@@ -289,14 +368,18 @@ function createServerHandler() {
         try {
           const body = await parseJSONBody(req);
           const { username, password } = body;
-          const user = db.users[username];
+          const trimmedUser = (username || "").trim();
+          const user = db.users[trimmedUser];
           if (!user || user.passwordHash !== hashPassword(password)) {
+            recordAccessLog(trimmedUser, "LOGIN_FAIL", clientIp, userAgent, { reason: "인증 실패" });
             return sendJSON(res, 401, { error: "아이디 또는 비밀번호가 일치하지 않습니다." });
           }
 
           const token = generateToken();
-          db.tokens[token] = username;
+          db.tokens[token] = trimmedUser;
           saveDB(db);
+
+          recordAccessLog(trimmedUser, "LOGIN_SUCCESS", clientIp, userAgent, { nickname: user.nickname });
 
           const { passwordHash: _, ...safeUser } = user;
           return sendJSON(res, 200, { message: "로그인 성공", token, user: safeUser });
@@ -336,16 +419,31 @@ function createServerHandler() {
             user.bookmarks = body.bookmarks;
           }
           if (typeof body.streak === "number") {
-            user.streak = body.streak;
+            user.streak = Math.max(user.streak || 0, body.streak);
+          }
+          if (typeof body.totalPoints === "number") {
+            user.totalPoints = Math.max(user.totalPoints || 0, body.totalPoints);
+          }
+          if (typeof body.todayScore === "number") {
+            user.todayScore = body.todayScore;
+          }
+          if (typeof body.maxRoundToday === "number") {
+            user.maxRoundToday = Math.max(user.maxRoundToday || 1, body.maxRoundToday);
           }
           if (body.lastAttendance) {
             user.lastAttendance = body.lastAttendance;
           }
 
           saveDB(db);
+
+          const action = body.action || "DATA_SYNC";
+          recordAccessLog(auth.username, action, clientIp, userAgent, body.details || {});
+
           return sendJSON(res, 200, {
             message: "동기화 완료",
             streak: user.streak,
+            totalPoints: user.totalPoints || 0,
+            maxRoundToday: user.maxRoundToday || 1,
             lastAttendance: user.lastAttendance,
             wrongQuestions: user.wrongQuestions,
             bookmarks: user.bookmarks
@@ -370,6 +468,8 @@ function createServerHandler() {
           username: user.username,
           nickname: user.nickname,
           streak: user.streak || 0,
+          totalPoints: user.totalPoints || 0,
+          maxRoundToday: user.maxRoundToday || 1,
           lastAttendance: user.lastAttendance || "",
           totalDays: history.length,
           totalSolved,
@@ -378,6 +478,27 @@ function createServerHandler() {
           wrongCount: (user.wrongQuestions || []).length,
           bookmarkCount: (user.bookmarks || []).length
         });
+      }
+
+      // 8-1. User Logs (Recent 30 logs for current user)
+      if (pathname === "/api/user/logs" && req.method === "GET") {
+        const auth = authenticate(req, db);
+        if (!auth) {
+          return sendJSON(res, 401, { success: false, error: "로그인이 필요합니다." });
+        }
+        const logs = loadLogs();
+        const userLogs = logs.filter(l => l.username === auth.username).slice(-30).reverse();
+        return sendJSON(res, 200, { success: true, logs: userLogs });
+      }
+
+      // 8-2. Admin Audit Logs (Recent 1,000 logs, restricted strictly to '단민러브')
+      if (pathname === "/api/admin/logs" && req.method === "GET") {
+        const auth = authenticate(req, db);
+        if (!auth || auth.username !== "단민러브") {
+          return sendJSON(res, 403, { success: false, error: "관리자('단민러브') 권한이 필요합니다." });
+        }
+        const logs = loadLogs();
+        return sendJSON(res, 200, { success: true, logs: logs.slice(-1000).reverse() });
       }
 
       // 9. Git Sync (for Portainer webhook or manual sync)
