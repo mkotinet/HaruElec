@@ -1,8 +1,8 @@
 {
   "2": "build_questions.js",
   "6": "app.js",
-  "7": "checkAppVersionUpdate",
-  "8": "gamification_shield.test.js",
+  "7": "init",
+  "8": "build_300_questions.js",
   "9": "playTone",
   "10": "build_250_questions.js",
   "11": "lucky_box.test.js",

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="app-version" content="3.1.0">
+  <meta name="app-version" content="3.2.0">
   <title>⚡ 하루전기 (Haru Elec) - 전기기사 필기 & 실기 10문제 CBT</title>
   <meta name="description" content="매일 10문제로 완성하는 전기기사 필기 & 실기 CBT 문제은행, KEC 해설 및 수험생 응원 메시지">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
@@ -29,10 +29,10 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
   <!-- App Stylesheet -->
-  <link rel="stylesheet" href="/css/style.css?v=3.1.0">
+  <link rel="stylesheet" href="/css/style.css?v=3.2.0">
 </head>
 <body>
-  <!-- Header -->
+  <!-- Header (Mobile Responsive & Zero-Overflow Layout) -->
   <header class="app-header">
     <div class="header-inner container">
       <div class="brand" id="brandLogo">
@@ -43,7 +43,8 @@
         </div>
       </div>
 
-      <div class="header-right">
+      <!-- Primary Header Actions (Always visible on mobile without horizontal scroll) -->
+      <div class="header-right header-primary-actions">
         <!-- Shield Badge (Max 2) -->
         <div class="shield-badge" id="shieldBadge" title="보유 방패 (최대 2개)">
           🛡️ <span id="shieldCount">0</span>/2
@@ -51,36 +52,43 @@
 
         <div class="streak-badge" id="streakBadge" title="연속 출석 스트릭">
           <span class="streak-icon">🔥</span>
-          <span class="streak-count" id="streakCount">0</span>일 연속
+          <span class="streak-count" id="streakCount">0</span>일
         </div>
 
-        <!-- Game Guide Modal Button -->
-        <button class="btn btn-outline-sm" id="gameGuideBtn" title="게임 규칙 & 찬스 아이템 안내" style="padding: 4px 8px;">
-          🎮 규칙
-        </button>
-
-        <!-- Hard Reload Page Button -->
-        <button class="btn btn-outline-sm" id="btnReloadPage" title="최신 버전 새로고침" style="padding: 4px 8px;">
-          🔄
-        </button>
-
-        <!-- PWA / Mobile Download & Install Button -->
-        <button class="btn btn-outline-sm" id="btnPwaInstall" title="모바일 앱 다운로드 및 설치 안내" style="padding: 4px 8px; border-color: #38bdf8; color: #38bdf8; font-weight: 700;">
-          📲 앱 설치
-        </button>
-
         <!-- Messages Inbox Button with Unread Badge -->
-        <button class="btn btn-outline-sm btn-inbox-header" id="btnInbox" title="수험생 응원 메시지 우체통" style="padding: 4px 8px; position: relative;">
+        <button class="btn btn-outline-sm btn-inbox-header" id="btnInbox" title="수험생 응원 메시지 우체통" type="button">
           📬
           <span id="inboxUnreadBadge" class="inbox-unread-badge hidden">0</span>
         </button>
 
-        <button class="btn btn-outline-sm hidden" id="adminAuditBtn" style="border-color: #818cf8; color: #818cf8; margin-right: 2px;">
-          🛡️ 감사
-        </button>
+        <!-- User Auth Button (Always anchored on screen right, zero overflow) -->
         <div class="user-menu" id="userMenu">
-          <button class="btn btn-outline-sm" id="authBtn">로그인</button>
+          <button class="btn btn-outline-sm" id="authBtn" type="button">로그인</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Secondary Utility Sub-Bar (Mobile Horizontal Scroll / Desktop Inline) -->
+    <div class="header-sub-bar-wrapper">
+      <div class="header-sub-bar container">
+        <!-- Game Guide Modal Button -->
+        <button class="btn btn-sub-chip" id="gameGuideBtn" title="게임 규칙 & 찬스 아이템 안내" type="button">
+          🎮 규칙
+        </button>
+
+        <!-- Hard Reload Page Button -->
+        <button class="btn btn-sub-chip" id="btnReloadPage" title="최신 버전 새로고침" type="button">
+          🔄 새로고침
+        </button>
+
+        <!-- PWA / Mobile Download & Install Button -->
+        <button class="btn btn-sub-chip chip-highlight" id="btnPwaInstall" title="모바일 앱 다운로드 및 설치 안내" type="button">
+          📲 앱 설치 / 다운로드
+        </button>
+
+        <button class="btn btn-sub-chip chip-admin hidden" id="adminAuditBtn" type="button">
+          🛡️ 감사 로그
+        </button>
       </div>
     </div>
   </header>
@@ -183,16 +191,53 @@
       </button>
     </nav>
 
-    <!-- Subject Filter (for Practice Mode) -->
+    <!-- Subject & Chapter Deep-Dive Filter (for Practice Mode) -->
     <div class="subject-filter-bar glass hidden" id="subjectFilterBar">
-      <span class="filter-label">과목 선택:</span>
-      <div class="filter-buttons">
-        <button class="filter-btn active" data-sub="0">전체 과목 (랜덤)</button>
-        <button class="filter-btn" data-sub="1">1. 전기자기학</button>
-        <button class="filter-btn" data-sub="2">2. 전력공학</button>
-        <button class="filter-btn" data-sub="3">3. 전기기기</button>
-        <button class="filter-btn" data-sub="4">4. 회로이론·제어</button>
-        <button class="filter-btn" data-sub="5">5. 전기설비기준</button>
+      <div class="filter-section-row">
+        <span class="filter-label">📚 과목 선택:</span>
+        <div class="filter-buttons" id="practiceSubjectButtons">
+          <button class="filter-btn active" data-sub="0" type="button">전체 과목 (랜덤)</button>
+          <button class="filter-btn" data-sub="1" type="button">1. 전기자기학</button>
+          <button class="filter-btn" data-sub="2" type="button">2. 전력공학</button>
+          <button class="filter-btn" data-sub="3" type="button">3. 전기기기</button>
+          <button class="filter-btn" data-sub="4" type="button">4. 회로이론·제어</button>
+          <button class="filter-btn" data-sub="5" type="button">5. 전기설비기준</button>
+          <button class="filter-btn" data-sub="6" type="button">6. 실기 핵심단답</button>
+        </div>
+      </div>
+
+      <!-- Sub-Subject Selector (especially for Sub 4: Circuit Theory vs Control Engineering) -->
+      <div class="sub-subject-row hidden" id="subSubjectRow">
+        <span class="sub-filter-label">⚡ 세부 과목:</span>
+        <div class="sub-subject-chips" id="subSubjectChips">
+          <button class="sub-chip active" data-sub-subject="" type="button">전체 보기</button>
+          <button class="sub-chip" data-sub-subject="회로이론" type="button">⚡ 회로이론 (25제)</button>
+          <button class="sub-chip" data-sub-subject="제어공학" type="button">🎛️ 제어공학 (23제)</button>
+        </div>
+      </div>
+
+      <!-- Detailed Chapter Selector (e.g., 제어공학 제3장 등) -->
+      <div class="chapter-filter-row hidden" id="chapterFilterRow">
+        <span class="sub-filter-label">📖 세부 단원(장):</span>
+        <div class="chapter-chips-scroll" id="chapterChipsList">
+          <button class="chapter-chip active" data-chapter="0" type="button">전체 장 (All)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wrong Notes Subject & Chapter Filter (for Wrong Mode) -->
+    <div class="wrong-filter-bar glass hidden" id="wrongFilterBar">
+      <div class="filter-section-row">
+        <span class="filter-label">📝 오답 과목:</span>
+        <div class="filter-buttons" id="wrongSubjectButtons">
+          <button class="filter-btn active" data-wrong-sub="0" type="button">전체 오답</button>
+        </div>
+      </div>
+      <div class="chapter-filter-row hidden" id="wrongChapterRow">
+        <span class="sub-filter-label">📖 오답 단원(장):</span>
+        <div class="chapter-chips-scroll" id="wrongChapterChipsList">
+          <button class="chapter-chip active" data-wrong-chapter="0" type="button">해당 과목 전체</button>
+        </div>
       </div>
     </div>
 
@@ -644,7 +689,7 @@
     <div class="modal-card glass" style="max-width: 600px; width: 92%;">
       <div class="modal-header">
         <h3 style="display: flex; align-items: center; gap: 8px;">
-          <span>📅</span> 2026년도 전기기사 국가기술자격 시험일정
+          <span>📅</span> 2026~2027년도 전기기사 국가기술자격 시험일정 & D-Day
         </h3>
         <button class="btn-close" id="closeQNetModal">✕</button>
       </div>
@@ -684,8 +729,8 @@
           <div style="font-size: 2rem; margin-bottom: 6px;">🤖</div>
           <strong style="font-size: 1.05rem; color: #38bdf8; display: block; margin-bottom: 4px;">안드로이드 완제품 APK 설치 파일</strong>
           <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 12px;">DEX 바이트코드 컴파일 & 전자서명 완료 (0.44 MB)</span>
-          <a href="/releases/HaruElec-v3.1.0-release.apk" class="btn btn-primary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; font-weight: 700; border-radius: 20px; text-decoration: none;">
-            <span>📥</span> HaruElec-v3.1.0.apk 다운로드
+          <a href="/releases/HaruElec-v3.2.0-release.apk" class="btn btn-primary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; font-weight: 700; border-radius: 20px; text-decoration: none;">
+            <span>📥</span> HaruElec-v3.2.0.apk 다운로드
           </a>
         </div>
 
@@ -724,8 +769,8 @@
         <div class="pwa-download-box" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 14px; text-align: center;">
           <strong style="font-size: 0.9rem; color: var(--text-main); display: block; margin-bottom: 4px;">🍎 아이폰 IPA 직접 설치 파일 (.ipa)</strong>
           <span style="font-size: 0.78rem; color: var(--text-muted); display: block; margin-bottom: 10px;">64-bit arm64 Mach-O & Web Bundle (Sideloadly / Scarlet 지원)</span>
-          <a href="/releases/HaruElec-v3.1.0.ipa" class="btn btn-secondary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; border-radius: 20px; text-decoration: none;">
-            <span>📥</span> HaruElec-v3.1.0.ipa 다운로드
+          <a href="/releases/HaruElec-v3.2.0.ipa" class="btn btn-secondary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; border-radius: 20px; text-decoration: none;">
+            <span>📥</span> HaruElec-v3.2.0.ipa 다운로드
           </a>
         </div>
       </div>
@@ -839,6 +884,6 @@
   <div class="toast hidden" id="appToast">알림 메시지</div>
 
   <!-- App Script -->
-  <script src="/js/app.js?v=3.1.0"></script>
+  <script src="/js/app.js?v=3.2.0"></script>
 </body>
 </html>

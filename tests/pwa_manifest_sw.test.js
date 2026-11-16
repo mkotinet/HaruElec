@@ -67,17 +67,17 @@ async function runTests() {
     assert.strictEqual(icon512.headers["content-type"], "image/png");
 
     // 4. Test Mobile Binary Downloads
-    console.log("4. Testing Android APK download serving (/releases/HaruElec-v3.1.0-release.apk)");
-    const apkRes = await request("/releases/HaruElec-v3.1.0-release.apk");
+    console.log("4. Testing Android APK download serving (/releases/HaruElec-v3.2.0-release.apk)");
+    const apkRes = await request("/releases/HaruElec-v3.2.0-release.apk");
     assert.strictEqual(apkRes.status, 200);
     assert.strictEqual(apkRes.headers["content-type"], "application/vnd.android.package-archive");
-    assert.ok(apkRes.headers["content-disposition"].includes("attachment; filename=\"HaruElec-v3.1.0-release.apk\""));
+    assert.ok(apkRes.headers["content-disposition"].includes("attachment; filename=\"HaruElec-v3.2.0-release.apk\""));
 
-    console.log("5. Testing iOS IPA download serving (/releases/HaruElec-v3.1.0.ipa)");
-    const ipaRes = await request("/releases/HaruElec-v3.1.0.ipa");
+    console.log("5. Testing iOS IPA download serving (/releases/HaruElec-v3.2.0.ipa)");
+    const ipaRes = await request("/releases/HaruElec-v3.2.0.ipa");
     assert.strictEqual(ipaRes.status, 200);
     assert.strictEqual(ipaRes.headers["content-type"], "application/octet-stream");
-    assert.ok(ipaRes.headers["content-disposition"].includes("attachment; filename=\"HaruElec-v3.1.0.ipa\""));
+    assert.ok(ipaRes.headers["content-disposition"].includes("attachment; filename=\"HaruElec-v3.2.0.ipa\""));
 
     console.log("✅ All PWA Manifest, Service Worker & Mobile Releases tests passed successfully!");
   } finally {

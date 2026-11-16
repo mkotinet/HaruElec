@@ -3,7 +3,7 @@
  * Handles App Lifecycle, Offline Caching, Background Push Notifications & Realtime Message Routing
  */
 
-const CACHE_NAME = 'haruelec-pwa-v3.1.0';
+const CACHE_NAME = 'haruelec-pwa-v3.2.0';
 
 // 1. Service Worker Installation
 self.addEventListener('install', (event) => {

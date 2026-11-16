@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const CURRENT_APP_VERSION = "3.1.0";
+  const CURRENT_APP_VERSION = "3.2.0";
 
   // KST Date Helper
   function getKSTDateString(dateObj = new Date()) {
@@ -133,6 +133,14 @@
     inboxFilter: "all",
     unreadMessagesCount: 0,
     lastSeenMessageId: null,
+
+    // v3.2.0 Deep-Dive Subject & Chapter Filter State
+    selectedSubjectId: 0,
+    selectedSubSubject: "", // e.g. "회로이론", "제어공학"
+    selectedChapterId: 0,
+    selectedWrongSubjectId: 0,
+    selectedWrongChapterId: 0,
+    chapterRegistry: null,
     inboxMessages: []
   };
 
@@ -216,6 +224,15 @@
     get wrongBadge() { return $("wrongBadge"); },
     get subjectFilterBar() { return $("subjectFilterBar"); },
     get filterBtns() { return $$(".filter-btn"); },
+    get practiceSubjectButtons() { return $$("#practiceSubjectButtons .filter-btn"); },
+    get subSubjectRow() { return $("subSubjectRow"); },
+    get subSubjectChips() { return $$("#subSubjectChips .sub-chip"); },
+    get chapterFilterRow() { return $("chapterFilterRow"); },
+    get chapterChipsList() { return $("chapterChipsList"); },
+    get wrongFilterBar() { return $("wrongFilterBar"); },
+    get wrongSubjectButtons() { return $("wrongSubjectButtons"); },
+    get wrongChapterRow() { return $("wrongChapterRow"); },
+    get wrongChapterChipsList() { return $("wrongChapterChipsList"); },
     get quizSection() { return $("quizSection"); },
     get resultSection() { return $("resultSection"); },
     get statsSection() { return $("statsSection"); },
@@ -1187,7 +1204,7 @@
     saveLocalState();
   }
 
-  // Load Q-Net Exam Schedule & D-Day
+  // Load Q-Net Exam Schedule & D-Day (Precise Calculation for 2026 ~ 2027)
   async function loadQNetSchedule() {
     try {
       const res = await fetch("/api/qnet-schedule");
@@ -1199,27 +1216,48 @@
         DOM.ddaySessionText.textContent = data.nextWritten.session;
       }
       if (DOM.ddayWrittenVal && data.nextWritten) {
-        const d = data.nextWritten.dDay;
-        DOM.ddayWrittenVal.textContent = d === 0 ? "D-Day (오늘)" : (d > 0 ? `D-${d}` : `D+${Math.abs(d)}`);
+        DOM.ddayWrittenVal.textContent = data.nextWritten.dDayText || (data.nextWritten.dDay === 0 ? "D-Day (오늘)" : `D-${data.nextWritten.dDay}`);
       }
       if (DOM.ddayPracticalVal && data.nextPractical) {
-        const d = data.nextPractical.dDay;
-        DOM.ddayPracticalVal.textContent = d === 0 ? "D-Day (오늘)" : (d > 0 ? `D-${d}` : `D+${Math.abs(d)}`);
+        DOM.ddayPracticalVal.textContent = data.nextPractical.dDayText || (data.nextPractical.dDay === 0 ? "D-Day (오늘)" : `D-${data.nextPractical.dDay}`);
       }
 
       // Populate Q-Net schedule modal list
       if (DOM.qnetScheduleListContainer && Array.isArray(data.schedules)) {
-        DOM.qnetScheduleListContainer.innerHTML = data.schedules.map(s => `
-          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
-            <div style="font-weight: 800; color: var(--accent-elec); font-size: 0.95rem; margin-bottom: 6px;">${s.session}</div>
-            <div style="font-size: 0.82rem; margin-bottom: 4px;">
-              <strong>⚡ 필기:</strong> 접수 ${s.written.docApp} | 시험 ${s.written.examStart}~${s.written.examEnd} | 발표 ${s.written.passDate}
+        DOM.qnetScheduleListContainer.innerHTML = data.schedules.map(s => {
+          const isNextWritten = data.nextWritten && data.nextWritten.session === s.session;
+          const isNextPractical = data.nextPractical && data.nextPractical.session === s.session;
+          const isHighlighted = isNextWritten || isNextPractical;
+
+          const getStatusBadge = (status, text) => {
+            if (status === "in_progress") {
+              return `<span style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 0.72rem; padding: 2px 6px; border-radius: 999px; font-weight: 700;">🔥 ${text}</span>`;
+            } else if (status === "today") {
+              return `<span style="background: rgba(251,191,36,0.25); border: 1px solid #fbbf24; color: #fbbf24; font-size: 0.72rem; padding: 2px 6px; border-radius: 999px; font-weight: 700;">⭐ D-Day</span>`;
+            } else if (status === "upcoming") {
+              return `<span style="background: rgba(56,189,248,0.18); border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.72rem; padding: 2px 6px; border-radius: 999px; font-weight: 700;">${text}</span>`;
+            }
+            return `<span style="background: rgba(255,255,255,0.06); color: var(--text-dim); font-size: 0.72rem; padding: 2px 6px; border-radius: 999px;">종료</span>`;
+          };
+
+          return `
+            <div style="background: rgba(255,255,255,0.04); border: ${isHighlighted ? "2px solid var(--accent-cyan); box-shadow: 0 0 14px rgba(56,189,248,0.2);" : "1px solid rgba(255,255,255,0.08);"} border-radius: 10px; padding: 12px 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <div style="font-weight: 800; color: ${isHighlighted ? "var(--accent-cyan)" : "var(--accent-elec)"}; font-size: 0.98rem;">
+                  ${s.session} ${isHighlighted ? `<span style="font-size: 0.72rem; background: var(--accent-cyan); color: #0f172a; padding: 1px 6px; border-radius: 4px; font-weight: 800; margin-left: 6px;">가장 가까운 회차</span>` : ""}
+                </div>
+              </div>
+              <div style="font-size: 0.82rem; margin-bottom: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+                <strong>⚡ 필기:</strong> 접수 ${s.written.docApp} | 시험 ${s.written.examStart}~${s.written.examEnd}
+                ${getStatusBadge(s.written.status, s.written.dDayText)}
+              </div>
+              <div style="font-size: 0.82rem; color: var(--accent-cyan); display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+                <strong>🛠️ 실기:</strong> 접수 ${s.practical.docApp} | 시험 ${s.practical.examStart}~${s.practical.examEnd}
+                ${getStatusBadge(s.practical.status, s.practical.dDayText)}
+              </div>
             </div>
-            <div style="font-size: 0.82rem; color: var(--accent-cyan);">
-              <strong>🛠️ 실기:</strong> 접수 ${s.practical.docApp} | 시험 ${s.practical.examStart}~${s.practical.examEnd} | 발표 ${s.practical.passDate}
-            </div>
-          </div>
-        `).join("");
+          `;
+        }).join("");
       }
     } catch (e) {
       console.warn("Q-Net schedule load error:", e);
@@ -1286,22 +1324,145 @@
     }
   }
 
-  // Load Practice Questions
-  async function loadPracticeQuestions(subjectId = 0) {
+  // Load and cache chapter registry from backend (v3.2.0)
+  async function loadChapterRegistry() {
+    try {
+      const res = await fetch("/api/questions/chapters");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.chapters) {
+        state.chapterRegistry = data.chapters;
+      }
+    } catch (e) {
+      console.warn("Failed to load chapter registry:", e);
+    }
+  }
+
+  // Update Practice Mode Subject & Chapter Filter UI
+  function updatePracticeFilterUI() {
+    // 1. Highlight subject buttons
+    if (DOM.practiceSubjectButtons && DOM.practiceSubjectButtons.length > 0) {
+      DOM.practiceSubjectButtons.forEach(btn => {
+        const subId = parseInt(btn.dataset.sub, 10);
+        btn.classList.toggle("active", subId === state.selectedSubjectId);
+      });
+    }
+
+    // 2. Toggle Sub-Subject Row (Subject 4: 회로이론 vs 제어공학)
+    if (DOM.subSubjectRow) {
+      if (state.selectedSubjectId === 4) {
+        DOM.subSubjectRow.classList.remove("hidden");
+        if (DOM.subSubjectChips) {
+          DOM.subSubjectChips.forEach(chip => {
+            chip.classList.toggle("active", chip.dataset.subSubject === state.selectedSubSubject);
+          });
+        }
+      } else {
+        DOM.subSubjectRow.classList.add("hidden");
+        state.selectedSubSubject = "";
+      }
+    }
+
+    // 3. Render Chapter Chips
+    if (!DOM.chapterFilterRow || !DOM.chapterChipsList) return;
+
+    if (state.selectedSubjectId === 0) {
+      DOM.chapterFilterRow.classList.add("hidden");
+      state.selectedChapterId = 0;
+      return;
+    }
+
+    DOM.chapterFilterRow.classList.remove("hidden");
+
+    if (!state.chapterRegistry || !state.chapterRegistry[state.selectedSubjectId]) {
+      DOM.chapterChipsList.innerHTML = `<button class="chapter-chip active" data-chapter="0" type="button">전체 장 (All)</button>`;
+      return;
+    }
+
+    const subInfo = state.chapterRegistry[state.selectedSubjectId];
+    let chaptersToRender = [];
+
+    if (state.selectedSubjectId === 4 && state.selectedSubSubject) {
+      const targetSub = subInfo.sub_subjects[state.selectedSubSubject];
+      if (targetSub && targetSub.chapters) {
+        chaptersToRender = Object.values(targetSub.chapters);
+      }
+    } else {
+      // Aggregate all chapters in this subject
+      const seen = new Set();
+      Object.values(subInfo.sub_subjects).forEach(s => {
+        Object.values(s.chapters).forEach(c => {
+          const key = `${c.chapter_id}_${c.chapter_name}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            chaptersToRender.push(c);
+          }
+        });
+      });
+    }
+
+    // Sort by chapter_id
+    chaptersToRender.sort((a, b) => a.chapter_id - b.chapter_id);
+
+    let html = `<button class="chapter-chip ${state.selectedChapterId === 0 ? "active" : ""}" data-chapter="0" type="button">전체 장 (All)</button>`;
+    chaptersToRender.forEach(c => {
+      const isActive = state.selectedChapterId === c.chapter_id;
+      html += `<button class="chapter-chip ${isActive ? "active" : ""}" data-chapter="${c.chapter_id}" type="button">${c.chapter_name} (${c.count}제)</button>`;
+    });
+
+    DOM.chapterChipsList.innerHTML = html;
+
+    // Attach click events
+    DOM.chapterChipsList.querySelectorAll(".chapter-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        state.selectedChapterId = parseInt(chip.dataset.chapter, 10) || 0;
+        updatePracticeFilterUI();
+        loadPracticeQuestions();
+      });
+    });
+  }
+
+  // Load Practice Questions (Enhanced for Subject & Chapter Deep-Dive)
+  async function loadPracticeQuestions(subIdParam) {
+    if (typeof subIdParam === "number") {
+      state.selectedSubjectId = subIdParam;
+      state.selectedChapterId = 0;
+    }
+
     try {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
-      if (DOM.questionText) DOM.questionText.textContent = "연습문제를 불러오는 중입니다...";
-      const res = await fetch(`/api/questions/practice?subject=${subjectId}&count=60`);
+      if (DOM.questionText) DOM.questionText.textContent = "문제를 선별하여 불러오는 중입니다...";
+
+      let url = `/api/questions/practice?subject=${state.selectedSubjectId}&count=60`;
+      if (state.selectedSubSubject) {
+        url += `&sub_subject=${encodeURIComponent(state.selectedSubSubject)}`;
+      }
+      if (state.selectedChapterId > 0) {
+        url += `&chapter=${state.selectedChapterId}`;
+      }
+
+      const res = await fetch(url);
       const data = await res.json();
       const rawList = data.questions || [];
-      const priorityList = selectUnsolvedFirstQuestions(rawList, 10, state.solvedQuestionIds);
+
+      if (rawList.length === 0) {
+        showToast("선택하신 단원에 해당하는 문제가 없습니다.");
+        if (DOM.questionText) DOM.questionText.textContent = "해당 조건의 문제가 없습니다. 다른 단원을 선택해주세요.";
+        return;
+      }
+
+      const countToPick = Math.min(10, rawList.length);
+      const priorityList = selectUnsolvedFirstQuestions(rawList, countToPick, state.solvedQuestionIds);
       state.questions = priorityList.map(q => shuffleQuestionOptions(q));
       state.currentIndex = 0;
       state.userAnswers = {};
       renderQuestion();
       updateItemUI();
       saveActiveQuizSession();
+
+      const chText = state.selectedChapterId > 0 ? ` [${state.selectedChapterId}장 집중]` : "";
+      showToast(`📚 ${state.selectedSubSubject || "선택 과목"}${chText} ${state.questions.length}문제가 준비되었습니다!`);
     } catch (e) {
       if (DOM.questionText) DOM.questionText.textContent = "문제를 불러오지 못했습니다.";
     }
@@ -1357,7 +1518,98 @@
     }
   }
 
-  // Load Wrong Note Questions
+  // Update Wrong Notes Filter UI (Subject & Chapter Filter for Mistakes)
+  async function updateWrongFilterBar() {
+    if (!DOM.wrongFilterBar || !DOM.wrongSubjectButtons) return;
+
+    if (state.wrongQuestions.size === 0) {
+      DOM.wrongFilterBar.classList.add("hidden");
+      return;
+    }
+
+    DOM.wrongFilterBar.classList.remove("hidden");
+
+    let allQuestions = [];
+    try {
+      const res = await fetch("/api/questions/practice?subject=0&count=300");
+      const data = await res.json();
+      allQuestions = data.questions || [];
+    } catch (e) {}
+
+    const wrongList = allQuestions.filter(q => state.wrongQuestions.has(q.id));
+
+    // Group wrong questions by subject_id
+    const subCounts = { 0: wrongList.length };
+    const subNames = {
+      1: "1. 전기자기학",
+      2: "2. 전력공학",
+      3: "3. 전기기기",
+      4: "4. 회로·제어",
+      5: "5. 전기설비기준",
+      6: "6. 실기단답"
+    };
+
+    wrongList.forEach(q => {
+      subCounts[q.subject_id] = (subCounts[q.subject_id] || 0) + 1;
+    });
+
+    // Render subject buttons
+    let subHtml = `<button class="filter-btn ${state.selectedWrongSubjectId === 0 ? "active" : ""}" data-wrong-sub="0" type="button">전체 오답 (${subCounts[0]}제)</button>`;
+    for (const [subId, name] of Object.entries(subNames)) {
+      const cnt = subCounts[subId] || 0;
+      if (cnt > 0) {
+        const isActive = state.selectedWrongSubjectId === parseInt(subId, 10);
+        subHtml += `<button class="filter-btn ${isActive ? "active" : ""}" data-wrong-sub="${subId}" type="button">${name} (${cnt}제)</button>`;
+      }
+    }
+    DOM.wrongSubjectButtons.innerHTML = subHtml;
+
+    // Attach subject button click events
+    DOM.wrongSubjectButtons.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.selectedWrongSubjectId = parseInt(btn.dataset.wrongSub, 10) || 0;
+        state.selectedWrongChapterId = 0;
+        updateWrongFilterBar();
+        loadWrongQuestions();
+      });
+    });
+
+    // Render Chapter Chips if specific subject selected
+    if (!DOM.wrongChapterRow || !DOM.wrongChapterChipsList) return;
+
+    if (state.selectedWrongSubjectId === 0) {
+      DOM.wrongChapterRow.classList.add("hidden");
+      return;
+    }
+
+    DOM.wrongChapterRow.classList.remove("hidden");
+    const subWrong = wrongList.filter(q => q.subject_id === state.selectedWrongSubjectId);
+    const chCounts = {};
+    const chNames = {};
+
+    subWrong.forEach(q => {
+      const chId = q.chapter_id || 1;
+      chCounts[chId] = (chCounts[chId] || 0) + 1;
+      chNames[chId] = q.chapter_name || `제${chId}장`;
+    });
+
+    let chHtml = `<button class="chapter-chip ${state.selectedWrongChapterId === 0 ? "active" : ""}" data-wrong-chapter="0" type="button">과목 전체 (${subWrong.length}제)</button>`;
+    Object.keys(chCounts).sort((a,b) => a - b).forEach(chId => {
+      const isActive = state.selectedWrongChapterId === parseInt(chId, 10);
+      chHtml += `<button class="chapter-chip ${isActive ? "active" : ""}" data-wrong-chapter="${chId}" type="button">${chNames[chId]} (${chCounts[chId]}제)</button>`;
+    });
+
+    DOM.wrongChapterChipsList.innerHTML = chHtml;
+    DOM.wrongChapterChipsList.querySelectorAll(".chapter-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        state.selectedWrongChapterId = parseInt(chip.dataset.wrongChapter, 10) || 0;
+        updateWrongFilterBar();
+        loadWrongQuestions();
+      });
+    });
+  }
+
+  // Load Wrong Note Questions (Enhanced for Chapter Filtering)
   async function loadWrongQuestions() {
     if (state.wrongQuestions.size === 0) {
       showToast("오답노트에 저장된 문제가 없습니다! 👏");
@@ -1369,13 +1621,31 @@
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
       if (DOM.questionText) DOM.questionText.textContent = "오답노트 문제를 준비하는 중입니다...";
-      const res = await fetch("/api/questions/practice?subject=0&count=60");
+
+      const res = await fetch("/api/questions/practice?subject=0&count=300");
       const data = await res.json();
       const all = data.questions || [];
-      state.questions = all.filter(q => state.wrongQuestions.has(q.id)).map(q => shuffleQuestionOptions(q));
+
+      let filtered = all.filter(q => state.wrongQuestions.has(q.id));
+
+      if (state.selectedWrongSubjectId > 0) {
+        filtered = filtered.filter(q => q.subject_id === state.selectedWrongSubjectId);
+      }
+      if (state.selectedWrongChapterId > 0) {
+        filtered = filtered.filter(q => q.chapter_id === state.selectedWrongChapterId);
+      }
+
+      if (filtered.length === 0) {
+        showToast("선택하신 단원에는 오답이 없습니다!");
+        if (DOM.questionText) DOM.questionText.textContent = "선택하신 단원에는 오답이 없습니다.";
+        return;
+      }
+
+      state.questions = filtered.map(q => shuffleQuestionOptions(q));
       state.currentIndex = 0;
       state.userAnswers = {};
       renderQuestion();
+      updateItemUI();
     } catch (e) {
       if (DOM.questionText) DOM.questionText.textContent = "오답노트를 불러오지 못했습니다.";
     }
@@ -1414,7 +1684,9 @@
     const currentNum = state.currentIndex + 1;
 
     // Header info
-    if (DOM.currentSubjectTag) DOM.currentSubjectTag.textContent = `제${q.subject_id}과목 ${q.subject}`;
+    const subLabel = q.sub_subject ? q.sub_subject : q.subject;
+    const chLabel = q.chapter_name ? ` ❯ ${q.chapter_name}` : "";
+    if (DOM.currentSubjectTag) DOM.currentSubjectTag.textContent = `제${q.subject_id}과목 ${subLabel}${chLabel}`;
     if (DOM.questionProgressText) DOM.questionProgressText.textContent = `Q ${currentNum} / ${total}`;
     if (DOM.progressBarFill) DOM.progressBarFill.style.width = `${(currentNum / total) * 100}%`;
     if (DOM.questionYear) DOM.questionYear.textContent = `${q.year}`;
@@ -1746,6 +2018,7 @@
 
     if (newMode === "leaderboard") {
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       DOM.quizSection.classList.add("hidden");
       DOM.statsSection.classList.add("hidden");
@@ -1756,6 +2029,7 @@
 
     if (newMode === "stats") {
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       DOM.quizSection.classList.add("hidden");
       DOM.statsSection.classList.remove("hidden");
@@ -1769,24 +2043,29 @@
 
     if (newMode === "daily") {
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadDailyQuestions(state.currentRound || 1);
     } else if (newMode === "practice") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.remove("hidden");
+      if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
-      loadPracticeQuestions(state.subjectId);
+      updatePracticeFilterUI();
+      loadPracticeQuestions();
     } else if (newMode === "kec") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadKecQuestions();
     } else if (newMode === "search") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.remove("hidden");
       if (DOM.searchInput.value.trim()) {
         performSearch(DOM.searchInput.value.trim());
@@ -1797,12 +2076,15 @@
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.remove("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
+      updateWrongFilterBar();
       loadWrongQuestions();
     } else if (newMode === "level") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
       DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       if (DOM.modalLevelSelect) DOM.modalLevelSelect.classList.remove("hidden");
       loadLevelQuestions(state.selectedLevel || 1, 1);
@@ -2494,15 +2776,39 @@
       });
     }
 
-    // Practice Subject filters
-    DOM.filterBtns.forEach(btn => {
-      btn.addEventListener("click", () => {
-        DOM.filterBtns.forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        state.subjectId = parseInt(btn.dataset.sub, 10);
-        loadPracticeQuestions(state.subjectId);
+    // Practice Subject & Chapter filters
+    if (DOM.practiceSubjectButtons && DOM.practiceSubjectButtons.length > 0) {
+      DOM.practiceSubjectButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          DOM.practiceSubjectButtons.forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          const subId = parseInt(btn.dataset.sub, 10);
+          state.selectedSubjectId = subId;
+          state.selectedChapterId = 0;
+          if (subId === 4) {
+            state.selectedSubSubject = "회로이론";
+          } else {
+            state.selectedSubSubject = "";
+          }
+          updatePracticeFilterUI();
+          loadPracticeQuestions();
+        });
       });
-    });
+    }
+
+    // Sub-Subject Chips (회로이론 vs 제어공학)
+    if (DOM.subSubjectChips && DOM.subSubjectChips.length > 0) {
+      DOM.subSubjectChips.forEach(chip => {
+        chip.addEventListener("click", () => {
+          DOM.subSubjectChips.forEach(c => c.classList.remove("active"));
+          chip.classList.add("active");
+          state.selectedSubSubject = chip.dataset.subSubject;
+          state.selectedChapterId = 0;
+          updatePracticeFilterUI();
+          loadPracticeQuestions();
+        });
+      });
+    }
 
     // Quiz Navigation
     DOM.prevBtn.addEventListener("click", () => {
@@ -2842,6 +3148,7 @@
     updateResumeQuizBanner();
     loadDailyQuestions();
     loadQNetSchedule();
+    loadChapterRegistry();
     checkAppVersionUpdate();
     checkUnreadMessages();
     updatePushToggleUI();

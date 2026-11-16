@@ -1,6 +1,6 @@
 {
   "name": "haru-elec",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "전기기사 필기 및 실기 시험 하루 10문제 CBT & 수험생 응원 메시지 웹 애플리케이션",
   "main": "server.js",
   "scripts": {

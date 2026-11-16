@@ -1,5 +1,5 @@
 {
-  "version": "3.1.0",
-  "build": "20261116_1630",
-  "releaseNotes": "v3.1.0 Major Upgrade: W3C PWA Install, iOS/Android Mobile Downloads & Install Guides, Member-to-Member Direct Messaging & Realtime Notifications, Web Push Support"
+  "version": "3.2.0",
+  "build": "20261117_0700",
+  "releaseNotes": "v3.2.0 Major Upgrade: Chapter Deep-Dive Study Mode (과목별/단원별 세분화), Mobile Header Zero-Overflow Fix, Precise 2026/2027 Q-Net Schedule & D-Day Engine, Wrong Notes Chapter Selection, 300 Questions Bank Expansion"
 }

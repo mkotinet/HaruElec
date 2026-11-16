@@ -327,10 +327,13 @@ function getLevelQuestions(level = 1, round = 1, track = "written", dateStr = ge
 }
 
 // Q-Net 국가기술자격 2026/2027 정기 전기기사 시험일정 및 D-Day 실시간 계산 엔진
+// Q-Net Public Exam Schedule & D-Day Engine (2026 ~ 2027 Official Q-Net Certification Schedule)
 function getQNetSchedule(currentKST = getKSTDateString()) {
   const schedules = [
     {
       session: "2026년 정기 기사 제1회",
+      year: 2026,
+      round: 1,
       written: {
         docApp: "2026-01-12 ~ 2026-01-15",
         examStart: "2026-02-07",
@@ -346,6 +349,8 @@ function getQNetSchedule(currentKST = getKSTDateString()) {
     },
     {
       session: "2026년 정기 기사 제2회",
+      year: 2026,
+      round: 2,
       written: {
         docApp: "2026-04-14 ~ 2026-04-17",
         examStart: "2026-05-09",
@@ -361,6 +366,8 @@ function getQNetSchedule(currentKST = getKSTDateString()) {
     },
     {
       session: "2026년 정기 기사 제3회",
+      year: 2026,
+      round: 3,
       written: {
         docApp: "2026-07-28 ~ 2026-07-31",
         examStart: "2026-08-22",
@@ -373,25 +380,124 @@ function getQNetSchedule(currentKST = getKSTDateString()) {
         examEnd: "2026-11-18",
         passDate: "2026-12-18"
       }
+    },
+    {
+      session: "2027년 정기 기사 제1회",
+      year: 2027,
+      round: 1,
+      written: {
+        docApp: "2027-01-11 ~ 2027-01-14",
+        examStart: "2027-02-06",
+        examEnd: "2027-03-02",
+        passDate: "2027-03-10"
+      },
+      practical: {
+        docApp: "2027-03-23 ~ 2027-03-26",
+        examStart: "2027-04-17",
+        examEnd: "2027-05-05",
+        passDate: "2027-06-11"
+      }
+    },
+    {
+      session: "2027년 정기 기사 제2회",
+      year: 2027,
+      round: 2,
+      written: {
+        docApp: "2027-04-13 ~ 2027-04-16",
+        examStart: "2027-05-08",
+        examEnd: "2027-05-29",
+        passDate: "2027-06-09"
+      },
+      practical: {
+        docApp: "2027-06-22 ~ 2027-06-25",
+        examStart: "2027-07-17",
+        examEnd: "2027-08-04",
+        passDate: "2027-09-03"
+      }
+    },
+    {
+      session: "2027년 정기 기사 제3회",
+      year: 2027,
+      round: 3,
+      written: {
+        docApp: "2027-07-27 ~ 2027-07-30",
+        examStart: "2027-08-21",
+        examEnd: "2027-09-11",
+        passDate: "2027-09-22"
+      },
+      practical: {
+        docApp: "2027-10-05 ~ 2027-10-08",
+        examStart: "2027-10-30",
+        examEnd: "2027-11-17",
+        passDate: "2027-12-17"
+      }
     }
   ];
 
-  const curDate = new Date(`${currentKST}T00:00:00+09:00`);
-
-  // Helper to calculate D-Day
-  function calcDDay(targetDateStr) {
-    const target = new Date(`${targetDateStr}T00:00:00+09:00`);
-    const diffMs = target - curDate;
-    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  // Precise UTC Day Difference Helper (Zero Jitter, Zero Timezone Drift)
+  function calcPreciseDDay(targetDateStr, curDateStr) {
+    const [ty, tm, td] = targetDateStr.split("-").map(Number);
+    const [cy, cm, cd] = curDateStr.split("-").map(Number);
+    const targetUtc = Date.UTC(ty, tm - 1, td);
+    const curUtc = Date.UTC(cy, cm - 1, cd);
+    return Math.round((targetUtc - curUtc) / 86400000);
   }
+
+  // Evaluate D-Day and active status for each exam
+  const evaluatedSchedules = schedules.map(s => {
+    const wDiffStart = calcPreciseDDay(s.written.examStart, currentKST);
+    const wDiffEnd = calcPreciseDDay(s.written.examEnd, currentKST);
+    let wStatus = "upcoming";
+    let wDDayText = `D-${wDiffStart}`;
+    if (wDiffStart === 0) {
+      wStatus = "today";
+      wDDayText = "D-Day (오늘)";
+    } else if (wDiffStart < 0 && wDiffEnd >= 0) {
+      wStatus = "in_progress";
+      wDDayText = `시험 진행 중 (종료 D-${wDiffEnd})`;
+    } else if (wDiffEnd < 0) {
+      wStatus = "closed";
+      wDDayText = "시험 종료";
+    }
+
+    const pDiffStart = calcPreciseDDay(s.practical.examStart, currentKST);
+    const pDiffEnd = calcPreciseDDay(s.practical.examEnd, currentKST);
+    let pStatus = "upcoming";
+    let pDDayText = `D-${pDiffStart}`;
+    if (pDiffStart === 0) {
+      pStatus = "today";
+      pDDayText = "D-Day (오늘)";
+    } else if (pDiffStart < 0 && pDiffEnd >= 0) {
+      pStatus = "in_progress";
+      pDDayText = `시험 진행 중 (종료 D-${pDiffEnd})`;
+    } else if (pDiffEnd < 0) {
+      pStatus = "closed";
+      pDDayText = "시험 종료";
+    }
+
+    return {
+      ...s,
+      written: {
+        ...s.written,
+        dDay: wDiffStart,
+        dDayText: wDDayText,
+        status: wStatus
+      },
+      practical: {
+        ...s.practical,
+        dDay: pDiffStart,
+        dDayText: pDDayText,
+        status: pStatus
+      }
+    };
+  });
 
   // Find next closest written and practical exam
   let nextWritten = null;
   let nextPractical = null;
 
-  for (const s of schedules) {
-    const wDiff = calcDDay(s.written.examStart);
-    if (wDiff >= 0 && !nextWritten) {
+  for (const s of evaluatedSchedules) {
+    if ((s.written.status === "upcoming" || s.written.status === "in_progress" || s.written.status === "today") && !nextWritten) {
       nextWritten = {
         session: s.session,
         type: "필기시험",
@@ -399,11 +505,12 @@ function getQNetSchedule(currentKST = getKSTDateString()) {
         examEnd: s.written.examEnd,
         docApp: s.written.docApp,
         passDate: s.written.passDate,
-        dDay: wDiff
+        dDay: s.written.dDay,
+        dDayText: s.written.dDayText,
+        status: s.written.status
       };
     }
-    const pDiff = calcDDay(s.practical.examStart);
-    if (pDiff >= 0 && !nextPractical) {
+    if ((s.practical.status === "upcoming" || s.practical.status === "in_progress" || s.practical.status === "today") && !nextPractical) {
       nextPractical = {
         session: s.session,
         type: "실기시험",
@@ -411,20 +518,84 @@ function getQNetSchedule(currentKST = getKSTDateString()) {
         examEnd: s.practical.examEnd,
         docApp: s.practical.docApp,
         passDate: s.practical.passDate,
-        dDay: pDiff
+        dDay: s.practical.dDay,
+        dDayText: s.practical.dDayText,
+        status: s.practical.status
       };
     }
   }
 
+  // Fallback defaults if year finishes
+  if (!nextWritten) {
+    nextWritten = {
+      session: "2027년 정기 기사 제1회",
+      type: "필기시험",
+      examStart: "2027-02-06",
+      examEnd: "2027-03-02",
+      docApp: "2027-01-11 ~ 2027-01-14",
+      passDate: "2027-03-10",
+      dDay: calcPreciseDDay("2027-02-06", currentKST),
+      dDayText: `D-${calcPreciseDDay("2027-02-06", currentKST)}`,
+      status: "upcoming"
+    };
+  }
+  if (!nextPractical) {
+    nextPractical = {
+      session: "2027년 정기 기사 제1회",
+      type: "실기시험",
+      examStart: "2027-04-17",
+      examEnd: "2027-05-05",
+      docApp: "2027-03-23 ~ 2027-03-26",
+      passDate: "2027-06-11",
+      dDay: calcPreciseDDay("2027-04-17", currentKST),
+      dDayText: `D-${calcPreciseDDay("2027-04-17", currentKST)}`,
+      status: "upcoming"
+    };
+  }
+
   return {
     kstDate: currentKST,
-    nextWritten: nextWritten || { session: "2027년 정기 기사 제1회", dDay: 90, examStart: "2027-02-06" },
-    nextPractical: nextPractical || { session: "2027년 정기 기사 제1회", dDay: 160, examStart: "2027-04-17" },
-    schedules: schedules,
+    nextWritten,
+    nextPractical,
+    schedules: evaluatedSchedules,
     official_source: "한국산업인력공단 Q-Net 국가기술자격 시험일정 (종목코드: 1150 전기기사)",
     qnet_url: "https://www.q-net.or.kr/crf005.do?id=crf00505&gSite=Q&gId=&jmCd=1150",
     kec_url: "https://www.kea.kr"
   };
+}
+
+// Chapter Hierarchy Registry Helper
+function getChapterRegistry() {
+  const map = {};
+  for (const q of QUESTIONS) {
+    const subId = q.subject_id;
+    if (!map[subId]) {
+      map[subId] = {
+        subject_id: subId,
+        subject: q.subject,
+        exam_track: q.exam_track || (subId === 6 ? "practical" : "written"),
+        sub_subjects: {}
+      };
+    }
+    const subKey = q.sub_subject || q.subject;
+    if (!map[subId].sub_subjects[subKey]) {
+      map[subId].sub_subjects[subKey] = {
+        name: subKey,
+        chapters: {}
+      };
+    }
+    const chId = q.chapter_id || 1;
+    const chName = q.chapter_name || `제${chId}장`;
+    if (!map[subId].sub_subjects[subKey].chapters[chId]) {
+      map[subId].sub_subjects[subKey].chapters[chId] = {
+        chapter_id: chId,
+        chapter_name: chName,
+        count: 0
+      };
+    }
+    map[subId].sub_subjects[subKey].chapters[chId].count++;
+  }
+  return map;
 }
 
 // MIME types
@@ -569,19 +740,63 @@ function createServerHandler() {
         return sendJSON(res, 200, scheduleData);
       }
 
-      // 3. Practice Questions
+      // 2-4. Chapter Registry & Hierarchy API (v3.2.0 New)
+      if (pathname === "/api/questions/chapters" && (req.method === "GET" || req.method === "HEAD")) {
+        const registry = getChapterRegistry();
+        return sendJSON(res, 200, {
+          success: true,
+          total_questions: QUESTIONS.length,
+          chapters: registry
+        });
+      }
+
+      // 3. Practice Questions (Supports subject, sub_subject, chapter, and count filters)
       if (pathname === "/api/questions/practice" && req.method === "GET") {
         const subjectId = parseInt(parsedUrl.searchParams.get("subject") || "0", 10);
+        const subSubject = (parsedUrl.searchParams.get("sub_subject") || "").trim();
+        const chapterParam = (parsedUrl.searchParams.get("chapter") || "").trim();
         const count = parseInt(parsedUrl.searchParams.get("count") || "10", 10);
+        const examTrack = (parsedUrl.searchParams.get("track") || "").trim();
 
         let pool = QUESTIONS;
-        if (subjectId >= 1 && subjectId <= 5) {
-          pool = QUESTIONS.filter(q => q.subject_id === subjectId);
+
+        // 1) Subject filter (1~6)
+        if (subjectId >= 1 && subjectId <= 6) {
+          pool = pool.filter(q => q.subject_id === subjectId);
         }
 
-        const shuffled = [...pool].sort(() => Math.random() - 0.5);
+        // 2) Track filter
+        if (examTrack === "written" || examTrack === "practical") {
+          pool = pool.filter(q => q.exam_track === examTrack);
+        }
+
+        // 3) Sub-subject filter (e.g., "제어공학", "회로이론")
+        if (subSubject) {
+          pool = pool.filter(q => (q.sub_subject || q.subject) === subSubject);
+        }
+
+        // 4) Chapter filter (by chapter_id or chapter_name)
+        if (chapterParam) {
+          const chNum = parseInt(chapterParam, 10);
+          if (!isNaN(chNum)) {
+            pool = pool.filter(q => q.chapter_id === chNum);
+          } else {
+            pool = pool.filter(q => (q.chapter_name || "").includes(chapterParam));
+          }
+        }
+
+        // Fisher-Yates shuffle
+        const shuffled = [...pool];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
         return sendJSON(res, 200, {
           subject_id: subjectId,
+          sub_subject: subSubject || null,
+          chapter: chapterParam || null,
+          total_available: pool.length,
           questions: shuffled.slice(0, count)
         });
       }
@@ -907,7 +1122,7 @@ function createServerHandler() {
 
       // 10. App Version & Mobile Auto-Update Check
       if (pathname === "/api/version" && (req.method === "GET" || req.method === "HEAD")) {
-        let verData = { version: "3.1.0", build: "20261116_1630" };
+        let verData = { version: "3.2.0", build: "20261117_0700" };
         try {
           const vFile = path.join(__dirname, "version.json");
           if (fs.existsSync(vFile)) {

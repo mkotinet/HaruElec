@@ -45,12 +45,32 @@ function request(method, pathUrl, headers = {}) {
     const res = await request("GET", "/api/qnet-schedule");
     assert.strictEqual(res.status, 200, "Q-Net schedule must return 200");
     assert(res.body.schedules && Array.isArray(res.body.schedules), "schedules array required");
-    assert.strictEqual(res.body.schedules.length, 3, "Must have 3 regular sessions");
+    assert(res.body.schedules.length >= 3, "Must have regular sessions");
     assert(res.body.nextWritten, "nextWritten object required");
     assert(typeof res.body.nextWritten.dDay === "number", "nextWritten.dDay must be number");
     assert(res.body.nextPractical, "nextPractical object required");
     assert(typeof res.body.nextPractical.dDay === "number", "nextPractical.dDay must be number");
     assert(res.body.official_source.includes("한국산업인력공단"), "official_source must cite HRD Korea");
+
+    // 1-1. GET /api/questions/chapters (v3.2.0 Chapter Deep-Dive)
+    console.log("1-1. Testing GET /api/questions/chapters...");
+    const chRes = await request("GET", "/api/questions/chapters");
+    assert.strictEqual(chRes.status, 200, "Chapters registry must return 200");
+    assert.strictEqual(chRes.body.total_questions, 300, "Total questions in registry must be 300");
+    assert(chRes.body.chapters["4"], "Subject 4 must exist in registry");
+    assert(chRes.body.chapters["4"].sub_subjects["제어공학"], "Subject 4 must contain 제어공학");
+    assert(chRes.body.chapters["4"].sub_subjects["제어공학"].chapters["3"], "제어공학 제3장 must exist in registry");
+
+    // 1-2. GET /api/questions/practice?subject=4&sub_subject=제어공학&chapter=3
+    console.log("1-2. Testing GET /api/questions/practice with 제어공학 제3장...");
+    const filteredRes = await request("GET", "/api/questions/practice?subject=4&sub_subject=" + encodeURIComponent("제어공학") + "&chapter=3");
+    assert.strictEqual(filteredRes.status, 200);
+    assert(filteredRes.body.questions.length > 0, "Filtered questions for 제어공학 제3장 must not be empty");
+    filteredRes.body.questions.forEach(q => {
+      assert.strictEqual(q.subject_id, 4);
+      assert.strictEqual(q.sub_subject, "제어공학");
+      assert.strictEqual(q.chapter_id, 3);
+    });
 
     // 2. GET /api/questions/level
     console.log("2. Testing GET /api/questions/level for levels 1~5");

@@ -13,7 +13,7 @@ assert(fs.existsSync(questionsPath), "data/questions.json must exist");
 const raw = fs.readFileSync(questionsPath, "utf8");
 const questions = JSON.parse(raw);
 assert(Array.isArray(questions), "questions.json must contain an array");
-assert(questions.length >= 100, `Expected at least 100 questions, found ${questions.length}`);
+assert.strictEqual(questions.length, 300, `Expected exactly 300 questions, found ${questions.length}`);
 
 // 3. Subject validation (6 subjects: 1~5 Written, 6 Practical)
 const subjectMap = {
@@ -38,6 +38,14 @@ questions.forEach((q, index) => {
   assert(q.subject_id in subjectMap, `Item ${index}: invalid subject_id ${q.subject_id}`);
   assert.strictEqual(q.subject, subjectMap[q.subject_id], `Item ${index}: subject name mismatch`);
   subjectCounts[q.subject_id]++;
+
+  // Chapter and Sub-Subject validation (v3.2.0)
+  assert(Number.isInteger(q.chapter_id) && q.chapter_id >= 1, `Item ${index}: invalid chapter_id ${q.chapter_id}`);
+  assert(typeof q.chapter_name === "string" && q.chapter_name.length > 0, `Item ${index}: invalid chapter_name`);
+  assert(typeof q.sub_subject === "string" && q.sub_subject.length > 0, `Item ${index}: invalid sub_subject`);
+  if (q.subject_id === 4) {
+    assert(q.sub_subject === "회로이론" || q.sub_subject === "제어공학", `Item ${index}: sub_subject for subject 4 must be 회로이론 or 제어공학`);
+  }
 
   // Level validation (1~5)
   assert(Number.isInteger(q.level) && q.level >= 1 && q.level <= 5, `Item ${index}: invalid level ${q.level}`);
