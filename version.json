@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0",
-  "build": "20261115_0820",
-  "releaseNotes": "Rule 9 Persistent Auth Session, Shield & Gamification System, Unsolved-First Selection, Mobile Auto-Update & Session Resume"
+  "version": "3.0.0",
+  "build": "20261116_1100",
+  "releaseNotes": "v3.0.0 Major Upgrade: 250 Questions (Written 200 + Practical 50), 5-Tier Level System, 7 In-Game Electric Chance Items, Lucky Box Reward Pool, Dual Track Leaderboard, Real-time Q-Net Exam Schedule API & KST Countdown"
 }

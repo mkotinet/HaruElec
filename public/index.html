@@ -67,6 +67,35 @@
   <!-- Main Container -->
   <main class="main-content container">
 
+    <!-- Exam Track Switcher (Written vs Practical) -->
+    <div class="exam-track-toggle-bar glass" id="examTrackToggleBar">
+      <button class="track-btn active" id="btnTrackWritten" type="button" title="1과목~5과목 필기 문제 풀이">
+        <span class="track-icon">⚡</span> <strong>필기 5과목</strong>
+      </button>
+      <button class="track-btn" id="btnTrackPractical" type="button" title="실기 핵심 단답형 및 KEC 계산 집중">
+        <span class="track-icon">🛠️</span> <strong>실기 핵심단답·계산</strong>
+      </button>
+    </div>
+
+    <!-- Q-Net Exam Schedule & D-Day Widget Card -->
+    <div class="qnet-dday-card glass" id="qnetDDayCard">
+      <div class="dday-header">
+        <span class="dday-badge">⚡ Q-Net 국가기술자격 D-Day</span>
+        <span class="dday-session" id="ddaySessionText">2026년 정기 기사 제1회</span>
+        <button class="dday-more-btn" id="btnOpenQNetModal" type="button">일정표 📅</button>
+      </div>
+      <div class="dday-grid">
+        <div class="dday-item">
+          <span class="dday-label">필기 시험</span>
+          <strong class="dday-val" id="ddayWrittenVal">D-Day 계산 중...</strong>
+        </div>
+        <div class="dday-item">
+          <span class="dday-label">실기 시험</span>
+          <strong class="dday-val" id="ddayPracticalVal">D-Day 계산 중...</strong>
+        </div>
+      </div>
+    </div>
+
     <!-- Resume Quiz Banner (Mobile Multitasking Resume) -->
     <div class="resume-quiz-banner glass hidden" id="resumeQuizBanner">
       <div class="resume-banner-content">
@@ -109,6 +138,9 @@
     <nav class="mode-tabs">
       <button class="mode-tab active" data-mode="daily">
         <span class="tab-icon">⚡</span> 오늘의 10문제
+      </button>
+      <button class="mode-tab" data-mode="level" id="tabModeLevel">
+        <span class="tab-icon">🎓</span> 난이도별 5제
       </button>
       <button class="mode-tab" data-mode="practice">
         <span class="tab-icon">📚</span> 과목별 집중
@@ -176,24 +208,59 @@
         </div>
       </div>
 
-      <!-- Quiz Chance Items Bar -->
+      <!-- Quiz Chance Items Bar (7 In-Game Electric Items with Horizontal Scroll) -->
       <div class="quiz-item-bar glass" id="quizItemBar">
-        <button class="item-btn" id="btnItem5050" title="오답 보기 2개 즉시 소거">
+        <button class="item-btn" id="btnItem5050" type="button" title="오답 보기 2개 즉시 소거">
           <span class="item-icon">⚡</span>
-          <span class="item-name">50:50 전력차단</span>
+          <span class="item-name">50:50 차단기</span>
           <span class="item-badge" id="item5050Count">2</span>
         </button>
-        <button class="item-btn" id="btnItemHeart" title="오답 1회 면제 및 재선택">
+        <button class="item-btn" id="btnItemHeart" type="button" title="오답 1회 면제 및 재선택">
           <span class="item-icon">💖</span>
-          <span class="item-name">절연보호</span>
+          <span class="item-name">비상 발전기</span>
           <span class="item-badge" id="itemHeartCount">2</span>
         </button>
-        <button class="item-btn" id="btnItem2x" title="이번 라운드 포인트 2배 적립">
+        <button class="item-btn" id="btnItem2x" type="button" title="이번 문제 포인트 2배 적립">
           <span class="item-icon">🚀</span>
-          <span class="item-name">2배 부스터</span>
+          <span class="item-name">2배 승압기</span>
           <span class="item-badge" id="item2xCount">2</span>
         </button>
+        <button class="item-btn" id="btnItemHint" type="button" title="핵심 공식 및 KEC 규정 힌트 엿보기">
+          <span class="item-icon">🔍</span>
+          <span class="item-name">공식 계측기</span>
+          <span class="item-badge" id="itemHintCount">2</span>
+        </button>
+        <button class="item-btn" id="btnItemClover" type="button" title="현재 문제를 즉시 정답으로 인정하고 통과">
+          <span class="item-icon">🍀</span>
+          <span class="item-name">통전 클로버</span>
+          <span class="item-badge" id="itemCloverCount">1</span>
+        </button>
+        <button class="item-btn" id="btnItemTimemachine" type="button" title="오답 선택 직후 실수 번복 및 재선택">
+          <span class="item-icon">⌛</span>
+          <span class="item-name">리셋 스위치</span>
+          <span class="item-badge" id="itemTimemachineCount">1</span>
+        </button>
+        <button class="item-btn" id="btnItemMagnet" type="button" title="연속 정답 콤보 추가 점수 2배 가속">
+          <span class="item-icon">🧲</span>
+          <span class="item-name">전자석 콤보</span>
+          <span class="item-badge" id="itemMagnetCount">1</span>
+        </button>
       </div>
+
+      <!-- In-Game Hint Box (Activated by 공식 계측기) -->
+      <div id="quizHintBox" class="quiz-hint-box glass hidden">
+        <div class="hint-header">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="hint-icon">🔍</span>
+            <strong style="color: var(--accent-elec);">공식 계측기 힌트</strong>
+          </div>
+          <button id="btnCloseHint" class="hint-close-btn" type="button">✕</button>
+        </div>
+        <div id="quizHintText" class="hint-body">
+          핵심 공식 및 원리를 적용하세요.
+        </div>
+      </div>
+
       <div class="active-item-banner hidden" id="activeItemBanner"></div>
 
       <!-- Question Card -->
@@ -319,6 +386,12 @@
         <button class="btn btn-outline-sm" id="refreshLeaderboardBtn">새로고침 🔄</button>
       </div>
 
+      <!-- Segregated Leaderboard Tabs (Written vs Practical) -->
+      <div class="leaderboard-tabs" id="leaderboardTabs">
+        <button class="lb-tab active" id="lbTabWritten" type="button">⚡ 필기 5과목 랭킹</button>
+        <button class="lb-tab" id="lbTabPractical" type="button">🛠️ 실기 핵심단답 랭킹</button>
+      </div>
+
       <div class="leaderboard-table-wrap">
         <table class="leaderboard-table">
           <thead>
@@ -326,7 +399,7 @@
               <th style="width: 60px; text-align: center;">순위</th>
               <th>학습자</th>
               <th style="text-align: center;">연속 출석</th>
-              <th style="text-align: center;">오늘 최고 라운드</th>
+              <th style="text-align: center;" id="lbRoundColHeader">필기 최고 라운드</th>
               <th style="text-align: right;">누적 점수</th>
             </tr>
           </thead>
@@ -466,6 +539,105 @@
             • 이전에 풀지 않은 미풀이 문제가 항상 우선 출제되며, 전체 문제를 풀면 새로운 주기가 시작됩니다.<br>
             • 모바일 백그라운드 전환이나 화면 꺼짐 시에도 풀던 문제가 자동으로 안전하게 보관됩니다.
           </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Surprise Lucky Box Modal (황금 번개 상자) -->
+  <div class="modal-overlay hidden" id="modalLuckyBox">
+    <div class="modal-card glass lucky-box-content" style="max-width: 380px; text-align: center;">
+      <div class="lucky-gift-icon" style="font-size: 3.5rem; margin-bottom: 6px; animation: floatGift 1.8s ease-in-out infinite;">⚡🎁</div>
+      <h3 style="color: #f59e0b; margin-bottom: 6px; font-size: 1.25rem;">깜짝 보너스 번개 상자!</h3>
+      <p style="font-size: 0.86rem; color: var(--text-muted); margin-bottom: 16px;">
+        문제를 멋지게 맞힌 당신에게 서프라이즈 선물이 도착했습니다!
+      </p>
+      <div id="luckyBoxRewardArea" class="hidden" style="margin-bottom: 16px; padding: 14px; background: rgba(245, 158, 11, 0.1); border: 1.5px dashed #f59e0b; border-radius: 16px;">
+        <div id="luckyRewardEmoji" style="font-size: 2.5rem; margin-bottom: 6px;">✨</div>
+        <div id="luckyRewardName" style="font-weight: 800; font-size: 1.05rem; color: #f59e0b;">아이템 획득!</div>
+        <div id="luckyRewardDesc" style="font-size: 0.82rem; color: var(--text-main); margin-top: 4px;">가방에 쏙 들어갔어요!</div>
+      </div>
+      <button id="btnOpenLuckyBox" class="btn btn-primary" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; width: 100%; font-weight: 800; font-size: 1rem; padding: 12px; border-radius: 20px;">
+        🎁 상자 열어보기!
+      </button>
+      <button id="btnCloseLuckyBox" class="btn btn-secondary hidden" style="width: 100%; font-weight: 700; font-size: 0.95rem; padding: 10px; border-radius: 20px; margin-top: 8px;">
+        닫고 퀴즈 계속하기 ✨
+      </button>
+    </div>
+  </div>
+
+  <!-- Level-Based Quiz Selector Modal (5단계 난이도 등급 선택) -->
+  <div class="modal-overlay hidden" id="modalLevelSelect">
+    <div class="modal-card glass" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 6px;">
+          <span>🎓</span> 난이도별 5문제 도전
+        </h3>
+        <button class="btn-close" id="btnCloseLevelModal">✕</button>
+      </div>
+      <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 14px;">
+        자신의 학습 단계에 맞는 레벨을 선택하여 맞춤 5문제를 풀 수 있습니다.
+      </p>
+      <div class="level-select-grid" style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="level-opt-card" data-level="1" type="button">
+          <span class="level-icon">🎒</span>
+          <div class="level-text">
+            <strong>1단계: 입문/기초</strong>
+            <span>기초 전기수학, 옴의 법칙, 기본 단위, 전하·자하 개념</span>
+          </div>
+        </button>
+        <button class="level-opt-card" data-level="2" type="button">
+          <span class="level-icon">🏫</span>
+          <div class="level-text">
+            <strong>2단계: 개념/필수</strong>
+            <span>전계/자계 기초, 변압기·유도기 기본원리, RLC 기본회로</span>
+          </div>
+        </button>
+        <button class="level-opt-card" data-level="3" type="button">
+          <span class="level-icon">🎓</span>
+          <div class="level-text">
+            <strong>3단계: 기출/응용</strong>
+            <span>최근 5개년 필기 빈출 표준 기출문제, 기기 특성곡선</span>
+          </div>
+        </button>
+        <button class="level-opt-card" data-level="4" type="button">
+          <span class="level-icon">📝</span>
+          <div class="level-text">
+            <strong>4단계: 심화/계산</strong>
+            <span>송전선로 특성방정식, 대칭좌표법, 전동기 토크 계산공식</span>
+          </div>
+        </button>
+        <button class="level-opt-card" data-level="5" type="button">
+          <span class="level-icon">💼</span>
+          <div class="level-text">
+            <strong>5단계: 고난도/실무</strong>
+            <span>KEC 최신 개정 접지계통(TN/TT/IT), 단락전류, 실기 단답 연계</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q-Net Full Exam Schedule Modal -->
+  <div class="modal-overlay hidden" id="modalQNetSchedule">
+    <div class="modal-card glass" style="max-width: 600px; width: 92%;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>📅</span> 2026년도 전기기사 국가기술자격 시험일정
+        </h3>
+        <button class="btn-close" id="closeQNetModal">✕</button>
+      </div>
+      <div class="modal-body" style="font-size: 0.9rem; line-height: 1.6;">
+        <div style="background: rgba(0, 212, 255, 0.08); border-left: 3px solid var(--accent-cyan); padding: 10px 14px; border-radius: 8px; margin-bottom: 14px;">
+          <strong>한국산업인력공단(Q-Net) 공식 일정</strong><br>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">종목코드: 1150 (전기기사) | 주관: 한국산업인력공단</span>
+        </div>
+        <div id="qnetScheduleListContainer" style="display: flex; flex-direction: column; gap: 12px;">
+          <!-- Dynamically populated from /api/qnet-schedule -->
+        </div>
+        <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end;">
+          <a href="https://www.q-net.or.kr/crf005.do?id=crf00505&gSite=Q&gId=&jmCd=1150" target="_blank" rel="noopener" class="btn btn-outline-sm">Q-Net 원서접수 바로가기 ↗</a>
+          <a href="https://www.kea.kr" target="_blank" rel="noopener" class="btn btn-outline-sm">대한전기협회 KEC 포털 ↗</a>
         </div>
       </div>
     </div>

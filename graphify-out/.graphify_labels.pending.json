@@ -2,5 +2,8 @@
   "6": "app.js",
   "7": "ref_assert",
   "8": "gamification_shield.test.js",
-  "9": "playTone"
+  "9": "playTone",
+  "10": "build_250_questions.js",
+  "11": "lucky_box.test.js",
+  "12": "selectUnsolvedFirstQuestions"
 }

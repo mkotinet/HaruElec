@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const CURRENT_APP_VERSION = "2.1.0";
+  const CURRENT_APP_VERSION = "3.0.0";
 
   // KST Date Helper
   function getKSTDateString(dateObj = new Date()) {
@@ -103,18 +103,29 @@
     lastLoadedDate: getKSTDateString(),
     authMode: "login", // login | register
 
-    // v2.1.0 Gamification & Multitasking State
+    // v2.1.0 & v3.0.0 Gamification, Dual-Track & Multitasking State
+    examTrack: "written", // written | practical
+    selectedLevel: 1, // 1:입문/기초 ~ 5:고난도/실무
+    maxRoundWritten: 1,
+    maxRoundPractical: 1,
     solvedQuestionIds: new Set(),
     shieldCount: 0,
     consecutivePerfectRounds: 0,
     items: {
       eraser5050: 2,
       heart: 2,
-      booster2x: 2
+      booster2x: 2,
+      hint: 2,
+      clover: 1,
+      timemachine: 1,
+      magnet: 1
     },
     pointMultiplier: 1,
     activeItemHeart: false,
-    activeItem5050Indices: []
+    activeItemMagnet: false,
+    activeItem5050Indices: [],
+    lastSelectedWrongOption: null,
+    qnetSchedule: null
   };
 
   function recordQuestionSolved(qId) {
@@ -264,6 +275,49 @@
     get btnItem5050() { return $("btnItem5050"); },
     get btnItemHeart() { return $("btnItemHeart"); },
     get btnItem2x() { return $("btnItem2x"); },
+    get itemHintCount() { return $("itemHintCount"); },
+    get itemCloverCount() { return $("itemCloverCount"); },
+    get itemTimemachineCount() { return $("itemTimemachineCount"); },
+    get itemMagnetCount() { return $("itemMagnetCount"); },
+    get btnItemHint() { return $("btnItemHint"); },
+    get btnItemClover() { return $("btnItemClover"); },
+    get btnItemTimemachine() { return $("btnItemTimemachine"); },
+    get btnItemMagnet() { return $("btnItemMagnet"); },
+
+    get quizHintBox() { return $("quizHintBox"); },
+    get btnCloseHint() { return $("btnCloseHint"); },
+    get quizHintText() { return $("quizHintText"); },
+
+    get modalLuckyBox() { return $("modalLuckyBox"); },
+    get btnOpenLuckyBox() { return $("btnOpenLuckyBox"); },
+    get btnCloseLuckyBox() { return $("btnCloseLuckyBox"); },
+    get luckyBoxRewardArea() { return $("luckyBoxRewardArea"); },
+    get luckyRewardEmoji() { return $("luckyRewardEmoji"); },
+    get luckyRewardName() { return $("luckyRewardName"); },
+    get luckyRewardDesc() { return $("luckyRewardDesc"); },
+
+    get examTrackToggleBar() { return $("examTrackToggleBar"); },
+    get btnTrackWritten() { return $("btnTrackWritten"); },
+    get btnTrackPractical() { return $("btnTrackPractical"); },
+    get qnetDDayCard() { return $("qnetDDayCard"); },
+    get ddaySessionText() { return $("ddaySessionText"); },
+    get ddayWrittenVal() { return $("ddayWrittenVal"); },
+    get ddayPracticalVal() { return $("ddayPracticalVal"); },
+    get btnOpenQNetModal() { return $("btnOpenQNetModal"); },
+    get modalQNetSchedule() { return $("modalQNetSchedule"); },
+    get closeQNetModal() { return $("closeQNetModal"); },
+    get qnetScheduleListContainer() { return $("qnetScheduleListContainer"); },
+
+    get tabModeLevel() { return $("tabModeLevel"); },
+    get modalLevelSelect() { return $("modalLevelSelect"); },
+    get btnCloseLevelModal() { return $("btnCloseLevelModal"); },
+    get levelOptCards() { return $$(".level-opt-card"); },
+
+    get leaderboardTabs() { return $("leaderboardTabs"); },
+    get lbTabWritten() { return $("lbTabWritten"); },
+    get lbTabPractical() { return $("lbTabPractical"); },
+    get lbRoundColHeader() { return $("lbRoundColHeader"); },
+
     get shieldDecisionBox() { return $("shieldDecisionBox"); },
     get shieldDecisionCount() { return $("shieldDecisionCount"); },
     get btnUseShieldDefense() { return $("btnUseShieldDefense"); },
@@ -560,6 +614,99 @@
     return { success: true, remaining: targetState.items.booster2x };
   }
 
+  function useItemHintLogic(question, targetState = state) {
+    if (!targetState.items || targetState.items.hint <= 0) {
+      return { success: false, reason: "NO_ITEM" };
+    }
+    targetState.items.hint = Math.max(0, targetState.items.hint - 1);
+    const hintText = question?.hint || (question?.explanation ? question.explanation.slice(0, 120) + "..." : "핵심 공식 및 원리를 적용하세요.");
+    return { success: true, hint: hintText, remaining: targetState.items.hint };
+  }
+
+  function useItemCloverLogic(question, targetState = state) {
+    if (!targetState.items || targetState.items.clover <= 0) {
+      return { success: false, reason: "NO_ITEM" };
+    }
+    if (!question) return { success: false, reason: "NO_QUESTION" };
+    targetState.items.clover = Math.max(0, targetState.items.clover - 1);
+    targetState.userAnswers[question.id] = question.answer;
+    return { success: true, answer: question.answer, remaining: targetState.items.clover };
+  }
+
+  function useItemTimemachineLogic(question, targetState = state) {
+    if (!targetState.items || targetState.items.timemachine <= 0) {
+      return { success: false, reason: "NO_ITEM" };
+    }
+    if (!question) return { success: false, reason: "NO_QUESTION" };
+    targetState.items.timemachine = Math.max(0, targetState.items.timemachine - 1);
+    delete targetState.userAnswers[question.id];
+    targetState.lastSelectedWrongOption = null;
+    return { success: true, remaining: targetState.items.timemachine };
+  }
+
+  function useItemMagnetLogic(targetState = state) {
+    if (!targetState.items || targetState.items.magnet <= 0) {
+      return { success: false, reason: "NO_ITEM" };
+    }
+    if (targetState.activeItemMagnet) {
+      return { success: false, reason: "ALREADY_ACTIVE" };
+    }
+    targetState.items.magnet = Math.max(0, targetState.items.magnet - 1);
+    targetState.activeItemMagnet = true;
+    return { success: true, remaining: targetState.items.magnet };
+  }
+
+  // 럭키 박스 8종 보상 풀
+  const LUCKY_BOX_REWARDS = [
+    { key: "eraser5050", type: "item", emoji: "⚡", name: "50:50 차단기 (+1)" },
+    { key: "heart", type: "item", emoji: "💖", name: "비상 발전기 (+1)" },
+    { key: "booster2x", type: "item", emoji: "🚀", name: "2배 승압기 (+1)" },
+    { key: "hint", type: "item", emoji: "🔍", name: "공식 계측기 (+1)" },
+    { key: "clover", type: "item", emoji: "🍀", name: "통전 클로버 (+1)" },
+    { key: "timemachine", type: "item", emoji: "⌛", name: "리셋 스위치 (+1)" },
+    { key: "magnet", type: "item", emoji: "🧲", name: "전자석 콤보 (+1)" },
+    { key: "shield", type: "shield", emoji: "🛡️", name: "안전 방패 (+1)" },
+    { key: "bonus_points", type: "points", emoji: "💰", name: "보너스 전기 포인트 (+100P)" }
+  ];
+
+  function rollLuckyBoxReward(targetState = state) {
+    const pick = LUCKY_BOX_REWARDS[Math.floor(Math.random() * LUCKY_BOX_REWARDS.length)];
+    if (pick.type === "shield") {
+      if (targetState.shieldCount >= 2) {
+        // 이미 방패가 최대(2개)면 포인트로 대체 지급
+        targetState.totalPoints = (targetState.totalPoints || 0) + 100;
+        return {
+          emoji: "💰",
+          name: "보너스 전기 포인트 (+100P)",
+          desc: "이미 방패를 최대 2개 보유 중이어서 +100P로 대체 지급되었습니다!"
+        };
+      } else {
+        targetState.shieldCount = Math.min(2, (targetState.shieldCount || 0) + 1);
+        return {
+          emoji: "🛡️",
+          name: "안전 방패 (+1)",
+          desc: "연속 만점을 놓쳐도 다음 라운드로 진출할 수 있는 방패가 충전되었습니다!"
+        };
+      }
+    } else if (pick.type === "points") {
+      targetState.totalPoints = (targetState.totalPoints || 0) + 100;
+      return {
+        emoji: "💰",
+        name: "보너스 전기 포인트 (+100P)",
+        desc: "지갑에 100P가 쏙 들어왔습니다!"
+      };
+    } else {
+      // 7종 아이템 중 1개 증가
+      if (!targetState.items) targetState.items = {};
+      targetState.items[pick.key] = (targetState.items[pick.key] || 0) + 1;
+      return {
+        emoji: pick.emoji,
+        name: pick.name,
+        desc: "인게임 찬스 가방에 아이템이 추가되었습니다!"
+      };
+    }
+  }
+
   // Version Check Helpers
   function isServerVersionNewer(serverVer, clientVer = CURRENT_APP_VERSION) {
     if (!serverVer || typeof serverVer !== "string") return false;
@@ -625,13 +772,21 @@
 
   // UI Updates for Items and Shields
   function updateItemUI() {
-    if (DOM.item5050Count) DOM.item5050Count.textContent = state.items.eraser5050;
-    if (DOM.itemHeartCount) DOM.itemHeartCount.textContent = state.items.heart;
-    if (DOM.item2xCount) DOM.item2xCount.textContent = state.items.booster2x;
+    if (DOM.item5050Count) DOM.item5050Count.textContent = state.items.eraser5050 || 0;
+    if (DOM.itemHeartCount) DOM.itemHeartCount.textContent = state.items.heart || 0;
+    if (DOM.item2xCount) DOM.item2xCount.textContent = state.items.booster2x || 0;
+    if (DOM.itemHintCount) DOM.itemHintCount.textContent = state.items.hint || 0;
+    if (DOM.itemCloverCount) DOM.itemCloverCount.textContent = state.items.clover || 0;
+    if (DOM.itemTimemachineCount) DOM.itemTimemachineCount.textContent = state.items.timemachine || 0;
+    if (DOM.itemMagnetCount) DOM.itemMagnetCount.textContent = state.items.magnet || 0;
 
-    if (DOM.btnItem5050) DOM.btnItem5050.disabled = state.items.eraser5050 <= 0;
-    if (DOM.btnItemHeart) DOM.btnItemHeart.disabled = state.items.heart <= 0 || state.activeItemHeart;
-    if (DOM.btnItem2x) DOM.btnItem2x.disabled = state.items.booster2x <= 0 || state.pointMultiplier === 2;
+    if (DOM.btnItem5050) DOM.btnItem5050.disabled = (state.items.eraser5050 || 0) <= 0;
+    if (DOM.btnItemHeart) DOM.btnItemHeart.disabled = (state.items.heart || 0) <= 0 || state.activeItemHeart;
+    if (DOM.btnItem2x) DOM.btnItem2x.disabled = (state.items.booster2x || 0) <= 0 || state.pointMultiplier === 2;
+    if (DOM.btnItemHint) DOM.btnItemHint.disabled = (state.items.hint || 0) <= 0;
+    if (DOM.btnItemClover) DOM.btnItemClover.disabled = (state.items.clover || 0) <= 0;
+    if (DOM.btnItemTimemachine) DOM.btnItemTimemachine.disabled = (state.items.timemachine || 0) <= 0;
+    if (DOM.btnItemMagnet) DOM.btnItemMagnet.disabled = (state.items.magnet || 0) <= 0 || state.activeItemMagnet;
   }
 
   function updateShieldBadge() {
@@ -719,6 +874,119 @@
     saveActiveQuizSession();
     showActiveItemBanner("🚀 2배 부스터 가동: 이번 라운드 획득 포인트가 2배로 적립됩니다!");
     showToast("🚀 2배 부스터 가동! 이번 라운드 포인트 2배 적립!");
+  }
+
+  function useItemHint() {
+    const q = state.questions[state.currentIndex];
+    if (!q) return;
+    const res = useItemHintLogic(q, state);
+    if (!res.success) {
+      showToast("남은 공식 계측기(힌트) 아이템이 없습니다!");
+      return;
+    }
+    updateItemUI();
+    saveLocalState();
+    saveActiveQuizSession();
+
+    if (DOM.quizHintText) DOM.quizHintText.textContent = res.hint;
+    if (DOM.quizHintBox) DOM.quizHintBox.classList.remove("hidden");
+    renderMath(DOM.quizHintBox);
+    showToast("🔍 공식 계측기 가동! 핵심 공식 힌트를 확인하세요.");
+  }
+
+  function useItemClover() {
+    const q = state.questions[state.currentIndex];
+    if (!q || state.userAnswers[q.id] !== undefined) return;
+    const res = useItemCloverLogic(q, state);
+    if (!res.success) {
+      showToast("남은 통전 클로버 아이템이 없습니다!");
+      return;
+    }
+    updateItemUI();
+    saveLocalState();
+    saveActiveQuizSession();
+    showToast("🍀 통전 클로버 발동! 이번 문제가 100% 정답 처리되었습니다.");
+    selectOption(res.answer);
+  }
+
+  function useItemTimemachine() {
+    const q = state.questions[state.currentIndex];
+    if (!q) return;
+    if (state.userAnswers[q.id] === undefined) {
+      showToast("아직 풀지 않은 문제입니다. 오답을 골랐을 때 되돌릴 수 있습니다.");
+      return;
+    }
+    if (state.userAnswers[q.id] === q.answer) {
+      showToast("이미 정답을 맞힌 문제입니다!");
+      return;
+    }
+    const res = useItemTimemachineLogic(q, state);
+    if (!res.success) {
+      showToast("남은 리셋 스위치(타임머신) 아이템이 없습니다!");
+      return;
+    }
+    updateItemUI();
+    saveLocalState();
+    saveActiveQuizSession();
+    renderQuestion(q);
+    showToast("⌛ 리셋 스위치 작동! 오답 선택이 취소되어 다시 풀 수 있습니다.");
+  }
+
+  function useItemMagnet() {
+    const res = useItemMagnetLogic(state);
+    if (!res.success) {
+      if (res.reason === "ALREADY_ACTIVE") {
+        showToast("🧲 이미 전자석 콤보가 활성화되어 있습니다!");
+      } else {
+        showToast("남은 전자석 콤보 아이템이 없습니다!");
+      }
+      return;
+    }
+    updateItemUI();
+    saveLocalState();
+    saveActiveQuizSession();
+    showActiveItemBanner("🧲 전자석 콤보 가동: 연속 정답 시 콤보 가산점이 2배로 폭증합니다!");
+    showToast("🧲 전자석 콤보 가동! 연속 정답 가산점 2배 적용!");
+  }
+
+  // 깜짝 보너스 럭키 박스 시스템
+  let currentRolledReward = null;
+
+  function triggerLuckyBoxRoll() {
+    // 28% 확률로 깜짝 번개 상자 등장
+    if (Math.random() >= 0.28) return;
+    if (!DOM.modalLuckyBox) return;
+
+    currentRolledReward = rollLuckyBoxReward(state);
+    saveLocalState();
+    syncWithServer("LUCKY_BOX_DROPPED", { reward: currentRolledReward.name });
+
+    // UI 모달 리셋 및 노출
+    if (DOM.luckyBoxRewardArea) DOM.luckyBoxRewardArea.classList.add("hidden");
+    if (DOM.btnOpenLuckyBox) DOM.btnOpenLuckyBox.style.display = "block";
+    if (DOM.btnCloseLuckyBox) DOM.btnCloseLuckyBox.classList.add("hidden");
+    DOM.modalLuckyBox.classList.remove("hidden");
+  }
+
+  function openLuckyBoxReward() {
+    if (!currentRolledReward) return;
+    if (DOM.luckyRewardEmoji) DOM.luckyRewardEmoji.textContent = currentRolledReward.emoji;
+    if (DOM.luckyRewardName) DOM.luckyRewardName.textContent = currentRolledReward.name;
+    if (DOM.luckyRewardDesc) DOM.luckyRewardDesc.textContent = currentRolledReward.desc;
+
+    if (DOM.luckyBoxRewardArea) DOM.luckyBoxRewardArea.classList.remove("hidden");
+    if (DOM.btnOpenLuckyBox) DOM.btnOpenLuckyBox.style.display = "none";
+    if (DOM.btnCloseLuckyBox) DOM.btnCloseLuckyBox.classList.remove("hidden");
+
+    sound.finish();
+    updateItemUI();
+    updateShieldBadge();
+    saveLocalState();
+  }
+
+  function closeLuckyBox() {
+    if (DOM.modalLuckyBox) DOM.modalLuckyBox.classList.add("hidden");
+    currentRolledReward = null;
   }
 
   function useShieldToPass() {
@@ -844,7 +1112,75 @@
     }
   }
 
-  // Load Daily Questions
+  // Switch Exam Track (Written vs Practical)
+  function switchExamTrack(track) {
+    if (track !== "written" && track !== "practical") return;
+    state.examTrack = track;
+    if (DOM.btnTrackWritten) {
+      if (track === "written") DOM.btnTrackWritten.classList.add("active");
+      else DOM.btnTrackWritten.classList.remove("active");
+    }
+    if (DOM.btnTrackPractical) {
+      if (track === "practical") DOM.btnTrackPractical.classList.add("active");
+      else DOM.btnTrackPractical.classList.remove("active");
+    }
+
+    const titlePrefix = track === "practical" ? "🛠️ 실기 핵심단답·계산 집중" : "⚡ 필기 5과목";
+    showToast(`${titlePrefix} 모드로 전환되었습니다!`);
+
+    // Reload current mode questions with new track
+    if (state.mode === "daily") {
+      loadDailyQuestions(state.currentRound || 1);
+    } else if (state.mode === "level") {
+      loadLevelQuestions(state.selectedLevel || 1, 1);
+    } else if (state.mode === "practice") {
+      loadPracticeQuestions(state.subjectId || 0);
+    } else if (state.mode === "leaderboard") {
+      loadLeaderboard(track);
+    }
+    saveLocalState();
+  }
+
+  // Load Q-Net Exam Schedule & D-Day
+  async function loadQNetSchedule() {
+    try {
+      const res = await fetch("/api/qnet-schedule");
+      if (!res.ok) return;
+      const data = await res.json();
+      state.qnetSchedule = data;
+
+      if (DOM.ddaySessionText && data.nextWritten) {
+        DOM.ddaySessionText.textContent = data.nextWritten.session;
+      }
+      if (DOM.ddayWrittenVal && data.nextWritten) {
+        const d = data.nextWritten.dDay;
+        DOM.ddayWrittenVal.textContent = d === 0 ? "D-Day (오늘)" : (d > 0 ? `D-${d}` : `D+${Math.abs(d)}`);
+      }
+      if (DOM.ddayPracticalVal && data.nextPractical) {
+        const d = data.nextPractical.dDay;
+        DOM.ddayPracticalVal.textContent = d === 0 ? "D-Day (오늘)" : (d > 0 ? `D-${d}` : `D+${Math.abs(d)}`);
+      }
+
+      // Populate Q-Net schedule modal list
+      if (DOM.qnetScheduleListContainer && Array.isArray(data.schedules)) {
+        DOM.qnetScheduleListContainer.innerHTML = data.schedules.map(s => `
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+            <div style="font-weight: 800; color: var(--accent-elec); font-size: 0.95rem; margin-bottom: 6px;">${s.session}</div>
+            <div style="font-size: 0.82rem; margin-bottom: 4px;">
+              <strong>⚡ 필기:</strong> 접수 ${s.written.docApp} | 시험 ${s.written.examStart}~${s.written.examEnd} | 발표 ${s.written.passDate}
+            </div>
+            <div style="font-size: 0.82rem; color: var(--accent-cyan);">
+              <strong>🛠️ 실기:</strong> 접수 ${s.practical.docApp} | 시험 ${s.practical.examStart}~${s.practical.examEnd} | 발표 ${s.practical.passDate}
+            </div>
+          </div>
+        `).join("");
+      }
+    } catch (e) {
+      console.warn("Q-Net schedule load error:", e);
+    }
+  }
+
+  // Load Daily Questions (Written or Practical)
   async function loadDailyQuestions(round = 1) {
     try {
       state.currentRound = Math.max(1, parseInt(round, 10) || 1);
@@ -854,12 +1190,14 @@
         roundBadge.classList.remove("hidden");
       }
       if (DOM.questionText) {
-        DOM.questionText.textContent = `오늘의 엄선 10문제를 불러오는 중입니다... (라운드 ${state.currentRound})`;
+        const countTxt = state.examTrack === "practical" ? "실기 엄선 5문제" : "오늘의 엄선 10문제";
+        DOM.questionText.textContent = `${countTxt}를 불러오는 중입니다... (라운드 ${state.currentRound})`;
       }
-      const res = await fetch(`/api/questions/daily?date=${state.todayDateStr}&round=${state.currentRound}`);
+      const res = await fetch(`/api/questions/daily?date=${state.todayDateStr}&round=${state.currentRound}&track=${state.examTrack}`);
       const data = await res.json();
       const rawList = data.questions || [];
-      const priorityList = selectUnsolvedFirstQuestions(rawList, 10, state.solvedQuestionIds);
+      const count = state.examTrack === "practical" ? 5 : 10;
+      const priorityList = selectUnsolvedFirstQuestions(rawList, count, state.solvedQuestionIds);
       state.questions = priorityList.map(q => shuffleQuestionOptions(q));
       state.currentIndex = 0;
       state.userAnswers = {};
@@ -869,6 +1207,36 @@
       saveActiveQuizSession();
     } catch (e) {
       if (DOM.questionText) DOM.questionText.textContent = "문제를 불러오지 못했습니다. 네트워크를 확인해주세요.";
+    }
+  }
+
+  // Load Level-Graduated Questions (1~5 Level Daily Challenge)
+  async function loadLevelQuestions(level = 1, round = 1) {
+    try {
+      state.selectedLevel = Math.max(1, Math.min(5, parseInt(level, 10) || 1));
+      state.currentRound = Math.max(1, parseInt(round, 10) || 1);
+      const levelNames = { 1: "입문/기초", 2: "개념/필수", 3: "기출/응용", 4: "심화/계산", 5: "고난도/실무" };
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) {
+        roundBadge.textContent = `🎓 ${state.selectedLevel}단계: ${levelNames[state.selectedLevel]} (R${state.currentRound})`;
+        roundBadge.classList.remove("hidden");
+      }
+      if (DOM.questionText) {
+        DOM.questionText.textContent = `[${levelNames[state.selectedLevel]}] 레벨 5문제를 불러오는 중입니다...`;
+      }
+      const res = await fetch(`/api/questions/level?level=${state.selectedLevel}&round=${state.currentRound}&track=${state.examTrack}&date=${state.todayDateStr}`);
+      const data = await res.json();
+      const rawList = data.questions || [];
+      const priorityList = selectUnsolvedFirstQuestions(rawList, 5, state.solvedQuestionIds);
+      state.questions = priorityList.map(q => shuffleQuestionOptions(q));
+      state.currentIndex = 0;
+      state.userAnswers = {};
+      renderQuestion();
+      updateItemUI();
+      updateShieldBadge();
+      saveActiveQuizSession();
+    } catch (e) {
+      if (DOM.questionText) DOM.questionText.textContent = "레벨 문제를 불러오지 못했습니다.";
     }
   }
 
@@ -1142,9 +1510,12 @@
     if (isCorrect) {
       sound.correct();
       state.wrongQuestions.delete(question.id);
+      // 깜짝 보너스 럭키 박스 드롭 (~28% 확률)
+      triggerLuckyBoxRoll();
     } else {
       sound.wrong();
       state.wrongQuestions.add(question.id);
+      state.lastSelectedWrongOption = selectedOption;
     }
 
     state.activeItem5050Indices = []; // clear after answering
@@ -1204,9 +1575,10 @@
 
     const nextRoundBtn = document.getElementById("nextRoundBtn");
     const multiplier = state.pointMultiplier || 1;
+    const isRoundMode = (state.mode === "daily" || state.mode === "level");
 
-    // Record streak & attendance for daily mode
-    if (state.mode === "daily") {
+    // Record streak & attendance for daily or level round mode
+    if (isRoundMode) {
       if (state.lastAttendance !== state.todayDateStr) {
         state.streak = (state.streak || 0) + 1;
         state.lastAttendance = state.todayDateStr;
@@ -1215,6 +1587,9 @@
 
       state.history.push({
         date: state.todayDateStr,
+        mode: state.mode,
+        level: state.selectedLevel,
+        track: state.examTrack,
         round: state.currentRound,
         score,
         total,
@@ -1222,12 +1597,23 @@
         timestamp: new Date().toISOString()
       });
 
+      // Update segregated round ranks
+      if (state.examTrack === "practical") {
+        state.maxRoundPractical = Math.max(state.maxRoundPractical || 1, state.currentRound);
+      } else {
+        state.maxRoundWritten = Math.max(state.maxRoundWritten || 1, state.currentRound);
+      }
+      state.maxRoundToday = Math.max(state.maxRoundToday || 1, state.currentRound);
+
       if (score === 100) {
-        const bonusPoints = 50;
+        let bonusPoints = 50;
+        if (state.activeItemMagnet) {
+          bonusPoints += 50; // 콤보 자석 가산점 2배
+          showToast("🧲 전자석 콤보 폭발! 콤보 가산점 +50P 추가 흡수!");
+        }
         const totalRoundPoints = (score + bonusPoints) * multiplier;
         state.totalPoints = (state.totalPoints || 0) + totalRoundPoints;
         state.todayScore = Math.max(state.todayScore || 0, score);
-        state.maxRoundToday = Math.max(state.maxRoundToday || 1, state.currentRound);
 
         // Award shield & consecutive bonuses
         const awardRes = awardShieldForConsecutivePerfect(state, 100);
@@ -1238,24 +1624,25 @@
           showToast(`🔥 3연속 만점 신화 달성! 보너스 +${awardRes.bonusPoints}P 추가 지급!`);
         }
 
+        const roundQuestionsCount = state.mode === "level" ? 5 : 10;
         if (DOM.resultTitle) DOM.resultTitle.textContent = `🎉 라운드 ${state.currentRound} 만점 통과!`;
-        if (DOM.resultSubtitle) DOM.resultSubtitle.textContent = `10문제를 모두 맞히셨습니다! 다음 라운드에 도전해 실력을 뽐내보세요! 🔥`;
+        if (DOM.resultSubtitle) DOM.resultSubtitle.textContent = `${total}문제를 모두 맞히셨습니다! 다음 라운드에 도전해 실력을 뽐내보세요! 🔥`;
         if (nextRoundBtn) {
-          nextRoundBtn.textContent = `🎉 100점 만점 통과! 라운드 ${state.currentRound + 1} (새 10문제) 도전하기 🔥 (+${totalRoundPoints}P)`;
+          nextRoundBtn.textContent = `🎉 100점 만점 통과! 라운드 ${state.currentRound + 1} (새 ${roundQuestionsCount}문제) 도전하기 🔥 (+${totalRoundPoints}P)`;
           nextRoundBtn.classList.remove("hidden");
         }
         if (DOM.shieldDecisionBox) DOM.shieldDecisionBox.classList.add("hidden");
 
         clearActiveQuizSession();
         saveLocalState();
-        syncWithServer("ROUND_CLEAR", { round: state.currentRound, score: 100 });
+        syncWithServer("ROUND_CLEAR", { round: state.currentRound, mode: state.mode, track: state.examTrack, score: 100 });
         showToast(`🎉 라운드 ${state.currentRound} 100점 만점 돌파! (+${totalRoundPoints}P)`);
       } else {
         const earnedPoints = score * multiplier;
         state.totalPoints = (state.totalPoints || 0) + earnedPoints;
         state.todayScore = Math.max(state.todayScore || 0, score);
-        if (DOM.resultTitle) DOM.resultTitle.textContent = "오늘의 10문제 완료!";
-        if (DOM.resultSubtitle) DOM.resultSubtitle.textContent = "수고하셨습니다. 매일 10문제가 합격을 만듭니다.";
+        if (DOM.resultTitle) DOM.resultTitle.textContent = state.mode === "level" ? "난이도별 5문제 완료!" : "오늘의 10문제 완료!";
+        if (DOM.resultSubtitle) DOM.resultSubtitle.textContent = "수고하셨습니다. 꾸준한 문제 풀이가 합격을 만듭니다.";
         if (nextRoundBtn) nextRoundBtn.classList.add("hidden");
 
         awardShieldForConsecutivePerfect(state, score);
@@ -1272,12 +1659,13 @@
         }
 
         saveLocalState();
-        syncWithServer("QUIZ_FINISH", { round: state.currentRound, score });
+        syncWithServer("QUIZ_FINISH", { round: state.currentRound, mode: state.mode, track: state.examTrack, score });
       }
 
       // Reset round multiplier & active items
       state.pointMultiplier = 1;
       state.activeItemHeart = false;
+      state.activeItemMagnet = false;
       state.activeItem5050Indices = [];
       hideActiveItemBanner();
       updateItemUI();
@@ -1365,6 +1753,13 @@
       DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       loadWrongQuestions();
+    } else if (newMode === "level") {
+      const roundBadge = document.getElementById("quizRoundBadge");
+      if (roundBadge) roundBadge.classList.add("hidden");
+      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
+      if (DOM.modalLevelSelect) DOM.modalLevelSelect.classList.remove("hidden");
+      loadLevelQuestions(state.selectedLevel || 1, 1);
     }
   }
 
@@ -1480,21 +1875,33 @@
     showToast("로그아웃 되었습니다.");
   }
 
-  // Real-time Leaderboard View
-  async function loadLeaderboard() {
+  // Real-time Leaderboard View (Segregated by track: written vs practical)
+  async function loadLeaderboard(track = state.examTrack || "written") {
     const tableBody = document.getElementById("leaderboardTableBody");
     if (!tableBody) return;
 
-    tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">실시간 랭킹을 집계 중입니다...</td></tr>`;
+    if (DOM.lbTabWritten && DOM.lbTabPractical) {
+      if (track === "practical") {
+        DOM.lbTabPractical.classList.add("active");
+        DOM.lbTabWritten.classList.remove("active");
+        if (DOM.lbRoundColHeader) DOM.lbRoundColHeader.textContent = "실기 최고 라운드";
+      } else {
+        DOM.lbTabWritten.classList.add("active");
+        DOM.lbTabPractical.classList.remove("active");
+        if (DOM.lbRoundColHeader) DOM.lbRoundColHeader.textContent = "필기 최고 라운드";
+      }
+    }
+
+    tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">${track === "practical" ? "실기" : "필기"} 실시간 랭킹을 집계 중입니다...</td></tr>`;
 
     try {
-      const res = await fetch("/api/leaderboard");
+      const res = await fetch(`/api/leaderboard?track=${track}`);
       if (!res.ok) throw new Error("Leaderboard fetch failed");
       const data = await res.json();
       const list = data.leaderboard || [];
 
       if (list.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">아직 등록된 랭킹 데이터가 없습니다. 첫 10문제에 도전해 보세요!</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">아직 등록된 랭킹 데이터가 없습니다. 첫 문제에 도전해 보세요!</td></tr>`;
         return;
       }
 
@@ -1504,8 +1911,9 @@
         const medalText = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank;
         const isMe = state.user && (state.user.username === user.username || state.user.nickname === user.nickname);
         const meTag = isMe ? `<span class="user-badge-me">나</span>` : "";
-        const roundBadge = user.maxRoundToday && user.maxRoundToday > 1
-          ? `<span class="user-badge-round">🔥 ${user.maxRoundToday}R</span>`
+        const roundNum = track === "practical" ? (user.maxRoundPractical || 1) : (user.maxRoundWritten || user.maxRoundToday || 1);
+        const roundBadge = roundNum > 1
+          ? `<span class="user-badge-round">🔥 ${roundNum}R</span>`
           : `<span style="color: var(--text-dim); font-size: 0.8rem;">1R</span>`;
 
         return `
@@ -1765,10 +2173,83 @@
       });
     }
 
-    // In-Game Chance Items
+    // Written vs Practical Track Switching
+    if (DOM.btnTrackWritten) {
+      DOM.btnTrackWritten.addEventListener("click", () => switchExamTrack("written"));
+    }
+    if (DOM.btnTrackPractical) {
+      DOM.btnTrackPractical.addEventListener("click", () => switchExamTrack("practical"));
+    }
+
+    // Q-Net Schedule Modal
+    if (DOM.btnOpenQNetModal && DOM.modalQNetSchedule) {
+      DOM.btnOpenQNetModal.addEventListener("click", () => {
+        DOM.modalQNetSchedule.classList.remove("hidden");
+      });
+    }
+    if (DOM.closeQNetModal && DOM.modalQNetSchedule) {
+      DOM.closeQNetModal.addEventListener("click", () => {
+        DOM.modalQNetSchedule.classList.add("hidden");
+      });
+    }
+
+    // Level Mode & Modal
+    if (DOM.tabModeLevel) {
+      DOM.tabModeLevel.addEventListener("click", () => {
+        if (DOM.modalLevelSelect) DOM.modalLevelSelect.classList.remove("hidden");
+      });
+    }
+    if (DOM.btnCloseLevelModal && DOM.modalLevelSelect) {
+      DOM.btnCloseLevelModal.addEventListener("click", () => {
+        DOM.modalLevelSelect.classList.add("hidden");
+      });
+    }
+    if (DOM.levelOptCards && DOM.levelOptCards.length > 0) {
+      DOM.levelOptCards.forEach(card => {
+        card.addEventListener("click", () => {
+          const lvl = parseInt(card.dataset.level, 10) || 1;
+          DOM.levelOptCards.forEach(c => c.classList.remove("active"));
+          card.classList.add("active");
+          if (DOM.modalLevelSelect) DOM.modalLevelSelect.classList.add("hidden");
+          switchMode("level");
+          loadLevelQuestions(lvl, 1);
+        });
+      });
+    }
+
+    // In-Game Chance Items (7 items)
     if (DOM.btnItem5050) DOM.btnItem5050.addEventListener("click", useItem5050);
     if (DOM.btnItemHeart) DOM.btnItemHeart.addEventListener("click", useItemHeart);
     if (DOM.btnItem2x) DOM.btnItem2x.addEventListener("click", useItem2x);
+    if (DOM.btnItemHint) DOM.btnItemHint.addEventListener("click", useItemHint);
+    if (DOM.btnItemClover) DOM.btnItemClover.addEventListener("click", useItemClover);
+    if (DOM.btnItemTimemachine) DOM.btnItemTimemachine.addEventListener("click", useItemTimemachine);
+    if (DOM.btnItemMagnet) DOM.btnItemMagnet.addEventListener("click", useItemMagnet);
+    if (DOM.btnCloseHint && DOM.quizHintBox) {
+      DOM.btnCloseHint.addEventListener("click", () => {
+        DOM.quizHintBox.classList.add("hidden");
+      });
+    }
+
+    // Lucky Box
+    if (DOM.btnOpenLuckyBox) DOM.btnOpenLuckyBox.addEventListener("click", openLuckyBoxReward);
+    if (DOM.btnCloseLuckyBox) DOM.btnCloseLuckyBox.addEventListener("click", closeLuckyBox);
+
+    // Leaderboard Track Tabs
+    if (DOM.lbTabWritten) {
+      DOM.lbTabWritten.addEventListener("click", () => {
+        if (DOM.lbTabWritten) DOM.lbTabWritten.classList.add("active");
+        if (DOM.lbTabPractical) DOM.lbTabPractical.classList.remove("active");
+        loadLeaderboard("written");
+      });
+    }
+    if (DOM.lbTabPractical) {
+      DOM.lbTabPractical.addEventListener("click", () => {
+        if (DOM.lbTabPractical) DOM.lbTabPractical.classList.add("active");
+        if (DOM.lbTabWritten) DOM.lbTabWritten.classList.remove("active");
+        loadLeaderboard("practical");
+      });
+    }
 
     // Shield Decision Actions
     if (DOM.btnUseShieldDefense) DOM.btnUseShieldDefense.addEventListener("click", useShieldToPass);
@@ -1856,6 +2337,7 @@
     updateItemUI();
     updateResumeQuizBanner();
     loadDailyQuestions();
+    loadQNetSchedule();
     checkAppVersionUpdate();
   }
 
@@ -1880,6 +2362,12 @@
       useItem5050Logic,
       useItemHeartLogic,
       useItem2xLogic,
+      useItemHintLogic,
+      useItemCloverLogic,
+      useItemTimemachineLogic,
+      useItemMagnetLogic,
+      LUCKY_BOX_REWARDS,
+      rollLuckyBoxReward,
       isServerVersionNewer,
       checkDateTransition
     };

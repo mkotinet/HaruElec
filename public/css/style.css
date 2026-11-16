@@ -1425,3 +1425,267 @@ body {
   margin: 0 auto;
 }
 
+/* ==========================================================
+   Exam Track Switcher (Written vs Practical)
+   ========================================================== */
+.exam-track-toggle-bar {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.track-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+.track-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+}
+.track-btn.active {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(0, 212, 255, 0.2));
+  border-color: var(--accent-elec);
+  color: var(--accent-elec);
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.25);
+}
+
+/* ==========================================================
+   Q-Net Exam Schedule & D-Day Card
+   ========================================================== */
+.qnet-dday-card {
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+.dday-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dday-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.15);
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+.dday-session {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.dday-more-btn {
+  background: transparent;
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.dday-more-btn:hover {
+  background: var(--accent-cyan);
+  color: #000;
+}
+.dday-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dday-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.dday-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.dday-val {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--accent-elec);
+  letter-spacing: -0.5px;
+}
+
+/* ==========================================================
+   7 In-Game Items Bar & Responsive Swipe
+   ========================================================== */
+.quiz-item-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.quiz-item-bar::-webkit-scrollbar {
+  height: 4px;
+}
+.quiz-item-bar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+.quiz-item-bar .item-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+}
+
+/* ==========================================================
+   In-Game Hint Box
+   ========================================================== */
+.quiz-hint-box {
+  background: linear-gradient(135deg, rgba(3, 105, 161, 0.2), rgba(15, 23, 42, 0.8));
+  border: 1.5px solid var(--accent-cyan);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  animation: fadeIn 0.3s ease;
+}
+.hint-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.hint-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.hint-close-btn:hover {
+  color: #fff;
+}
+.hint-body {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent-cyan);
+}
+
+/* ==========================================================
+   Surprise Lucky Box Animations
+   ========================================================== */
+@keyframes floatGift {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(4deg); }
+}
+.lucky-box-content {
+  border: 2px solid #f59e0b;
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.3);
+}
+
+/* ==========================================================
+   5-Level Selector Cards
+   ========================================================== */
+.level-opt-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.level-opt-card:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--accent-cyan);
+  transform: translateX(4px);
+}
+.level-icon {
+  font-size: 1.8rem;
+  flex: 0 0 36px;
+  text-align: center;
+}
+.level-text {
+  display: flex;
+  flex-direction: column;
+}
+.level-text strong {
+  font-size: 0.95rem;
+  color: var(--accent-elec);
+  margin-bottom: 2px;
+}
+.level-text span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ==========================================================
+   Dual-Track Leaderboard Tabs
+   ========================================================== */
+.leaderboard-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.lb-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.lb-tab:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+.lb-tab.active {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(0, 212, 255, 0.2));
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+

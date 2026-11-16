@@ -1,0 +1,183 @@
+{
+  "data/questions.json": {
+    "mtime": 1794556581.1700535,
+    "seen": 1794698468.783419,
+    "ast_hash": "df2a656162bb23798dca7801e532255d",
+    "semantic_hash": "df2a656162bb23798dca7801e532255d",
+    "ast_empty": true
+  },
+  "docker-compose.yml": {
+    "mtime": 1794542460.7900043,
+    "seen": 1794698468.783421,
+    "ast_hash": "b2597c673392a4fef18941370b8349dc",
+    "semantic_hash": "b2597c673392a4fef18941370b8349dc"
+  },
+  "generate_questions.js": {
+    "mtime": 1794542326.844457,
+    "seen": 1794698468.7834592,
+    "ast_hash": "94ac6b07752a7afa4360a9174b58ec44",
+    "semantic_hash": "94ac6b07752a7afa4360a9174b58ec44"
+  },
+  "package.json": {
+    "mtime": 1794698963.4147408,
+    "seen": 1794698986.3973498,
+    "ast_hash": "15ee08d75a7fe091b3f6f8e0d14eeda0",
+    "semantic_hash": ""
+  },
+  "public/js/app.js": {
+    "mtime": 1794698876.434426,
+    "seen": 1794698986.397351,
+    "ast_hash": "4123edeb57825c11c8badcdf2f2240e5",
+    "semantic_hash": ""
+  },
+  "scripts/build_questions.js": {
+    "mtime": 1794556571.8653328,
+    "seen": 1794698468.783535,
+    "ast_hash": "660c09347de6d949bcfcd7730d750f52",
+    "semantic_hash": "660c09347de6d949bcfcd7730d750f52"
+  },
+  "scripts/sub1.js": {
+    "mtime": 1794556400.4669802,
+    "seen": 1794698468.7835588,
+    "ast_hash": "0a33d62c3badc2ac696e4929a375213c",
+    "semantic_hash": "0a33d62c3badc2ac696e4929a375213c"
+  },
+  "scripts/sub2.js": {
+    "mtime": 1794556436.5357356,
+    "seen": 1794698468.7836,
+    "ast_hash": "90294ccb3a257cbf5901b8223c597a34",
+    "semantic_hash": "90294ccb3a257cbf5901b8223c597a34"
+  },
+  "scripts/sub3.js": {
+    "mtime": 1794556475.7826874,
+    "seen": 1794698468.783628,
+    "ast_hash": "5c4bab94cfcd81340bd9525b73c61c16",
+    "semantic_hash": "5c4bab94cfcd81340bd9525b73c61c16"
+  },
+  "scripts/sub4.js": {
+    "mtime": 1794556513.6989076,
+    "seen": 1794698468.783651,
+    "ast_hash": "dd56b132f21b3e618072d82a17cd129b",
+    "semantic_hash": "dd56b132f21b3e618072d82a17cd129b"
+  },
+  "scripts/sub5.js": {
+    "mtime": 1794556567.1025198,
+    "seen": 1794698468.783674,
+    "ast_hash": "0af6dac1778d0260a3728f17a04554ac",
+    "semantic_hash": "0af6dac1778d0260a3728f17a04554ac"
+  },
+  "server.js": {
+    "mtime": 1794699249.777474,
+    "seen": 1794699259.1942852,
+    "ast_hash": "4c97877494f54ec446800eb7169c7f86",
+    "semantic_hash": ""
+  },
+  "tests/audit_logs.test.js": {
+    "mtime": 1794642533.7335975,
+    "seen": 1794698468.78372,
+    "ast_hash": "0e6768fcd62a842a1935e7e459f0730d",
+    "semantic_hash": "0e6768fcd62a842a1935e7e459f0730d"
+  },
+  "tests/frontend_lifecycle.test.js": {
+    "mtime": 1794642654.0918632,
+    "seen": 1794698468.783744,
+    "ast_hash": "d558a0734b75682024dc0ac4bd1c7200",
+    "semantic_hash": "d558a0734b75682024dc0ac4bd1c7200"
+  },
+  "tests/leaderboard_rounds.test.js": {
+    "mtime": 1794642595.6075065,
+    "seen": 1794698468.7837682,
+    "ast_hash": "26ded461e0d4fb57cc136a9b26f35535",
+    "semantic_hash": "26ded461e0d4fb57cc136a9b26f35535"
+  },
+  "tests/questions.test.js": {
+    "mtime": 1794556250.8277116,
+    "seen": 1794698468.783791,
+    "ast_hash": "65cd537924055263245731da790c44d2",
+    "semantic_hash": "65cd537924055263245731da790c44d2"
+  },
+  "tests/server.test.js": {
+    "mtime": 1794699054.1559186,
+    "seen": 1794699169.90528,
+    "ast_hash": "0e858614a52716936afef0f65f0cc76c",
+    "semantic_hash": ""
+  },
+  "tests/gamification_shield.test.js": {
+    "mtime": 1794698741.295918,
+    "seen": 1794698986.397364,
+    "ast_hash": "14c9bd07613cd46bed7636004ec4b3c6",
+    "semantic_hash": ""
+  },
+  "tests/persistent_auth.test.js": {
+    "mtime": 1794698551.3942354,
+    "seen": 1794698986.397367,
+    "ast_hash": "d4925eba12f06c3bc515346aa6481f9f",
+    "semantic_hash": ""
+  },
+  "tests/quiz_session_persistence.test.js": {
+    "mtime": 1794698620.8827164,
+    "seen": 1794698986.3973691,
+    "ast_hash": "0f43b608b6fc7db055c21778cb13caa3",
+    "semantic_hash": ""
+  },
+  "tests/unsolved_priority.test.js": {
+    "mtime": 1794698616.8372197,
+    "seen": 1794698986.3973708,
+    "ast_hash": "94a2e48f55cf1cde30ee6066f1ab0ec9",
+    "semantic_hash": ""
+  },
+  "tests/version_check.test.js": {
+    "mtime": 1794698744.831664,
+    "seen": 1794698986.397373,
+    "ast_hash": "dc47574072a010bdcb7838f55271dc01",
+    "semantic_hash": ""
+  },
+  "version.json": {
+    "mtime": 1794698553.885412,
+    "seen": 1794698986.397374,
+    "ast_hash": "e898cd1891bff37cd42cac936c34f448",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1794699152.0275807,
+    "seen": 1794699169.9052851,
+    "ast_hash": "57d62b92d7509e6faee69a9b5aab7bea",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-11-14-haruelec-enhancement-v2.md": {
+    "mtime": 1794642520.6522043,
+    "seen": 1794698986.397376,
+    "ast_hash": "a6cb42cc6225a20788b0cc92386d0ab9",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-11-15-haruelec-enhancement-v21.md": {
+    "mtime": 1794698515.6383793,
+    "seen": 1794698986.397377,
+    "ast_hash": "83a0897288cfff32babf249c707d35d8",
+    "semantic_hash": ""
+  },
+  "ledger.md": {
+    "mtime": 1794699156.2771516,
+    "seen": 1794699169.905289,
+    "ast_hash": "db9d3b92991e6becb20cbcb183b033b5",
+    "semantic_hash": ""
+  },
+  "public/index.html": {
+    "mtime": 1794698936.8139386,
+    "seen": 1794698986.39738,
+    "ast_hash": "725b68d8432e8d2ed7ad79b0bc2c1ddf",
+    "semantic_hash": ""
+  },
+  "\uae30\uc220\ub808\ud3ec\ud2b8.md": {
+    "mtime": 1794699110.5049987,
+    "seen": 1794699169.905291,
+    "ast_hash": "67ba3faff3f33fff7a49c874c1ba044d",
+    "semantic_hash": ""
+  },
+  "\uc81c\uc791\ud788\uc2a4\ud1a0\ub9ac.md": {
+    "mtime": 1794699131.9468086,
+    "seen": 1794699169.905292,
+    "ast_hash": "5cd25ac4e62346cc80e7970553b84b6d",
+    "semantic_hash": ""
+  }
+}

@@ -180,14 +180,29 @@ function seededShuffle(array, seed) {
   return result;
 }
 
-// Select 10 questions for daily quiz (2 per subject), with round support
-function getDailyQuestions(dateStr, round = 1) {
+// Select 10 questions for daily quiz (2 per subject for written, or 10 from practical)
+function getDailyQuestions(dateStr, round = 1, track = "written") {
   const roundNum = Math.max(1, parseInt(round, 10) || 1);
   const baseSeed = getDaySeed(dateStr);
   const roundOffset = (roundNum - 1) * 31;
   const seed = (baseSeed + roundOffset) >>> 0;
-  const bySubject = { 1: [], 2: [], 3: [], 4: [], 5: [] };
 
+  if (track === "practical") {
+    // 6. 실기 전기설비설계 및 관리 문제풀 (50문항)
+    const practicalPool = QUESTIONS.filter(q => q.subject_id === 6 || q.exam_track === "practical");
+    const pool = practicalPool.length > 0 ? practicalPool : QUESTIONS;
+    const shuffled = seededShuffle(pool, seed + 6000);
+    const count = 5; // 실기는 문제당 집중도가 높으므로 5문항 세트 (또는 10문항)
+    const offset = ((roundNum - 1) * count) % Math.max(1, pool.length - count);
+    let chosen = shuffled.slice(offset, offset + count);
+    if (chosen.length < count) {
+      chosen = shuffled.slice(0, count);
+    }
+    return chosen;
+  }
+
+  // 기본: 필기 5과목 (과목당 2문제 = 10문제)
+  const bySubject = { 1: [], 2: [], 3: [], 4: [], 5: [] };
   QUESTIONS.forEach(q => {
     if (bySubject[q.subject_id]) {
       bySubject[q.subject_id].push(q);
@@ -208,6 +223,141 @@ function getDailyQuestions(dateStr, round = 1) {
 
   // Shuffle selected 10 questions deterministically
   return seededShuffle(selected, seed + 9999);
+}
+
+// Select 5 questions for level-graduated quiz (1:입문/기초, 2:개념/필수, 3:기출/응용, 4:심화/계산, 5:고난도/실무)
+const LEVEL_NAMES = {
+  1: "입문/기초",
+  2: "개념/필수",
+  3: "기출/응용",
+  4: "심화/계산",
+  5: "고난도/실무"
+};
+
+function getLevelQuestions(level = 1, round = 1, track = "written", dateStr = getKSTDateString()) {
+  const lvl = Math.max(1, Math.min(5, parseInt(level, 10) || 1));
+  const roundNum = Math.max(1, parseInt(round, 10) || 1);
+  const baseSeed = getDaySeed(dateStr);
+  const seed = (baseSeed + (roundNum - 1) * 37 + lvl * 101) >>> 0;
+
+  let pool = QUESTIONS.filter(q => q.level === lvl);
+  if (track === "practical") {
+    const practicalPool = pool.filter(q => q.exam_track === "practical");
+    if (practicalPool.length >= 5) pool = practicalPool;
+  } else {
+    const writtenPool = pool.filter(q => q.exam_track === "written");
+    if (writtenPool.length >= 5) pool = writtenPool;
+  }
+  if (pool.length < 5) pool = QUESTIONS;
+
+  const shuffled = seededShuffle(pool, seed);
+  const offset = ((roundNum - 1) * 5) % Math.max(1, pool.length - 4);
+  let chosen = shuffled.slice(offset, offset + 5);
+  if (chosen.length < 5) {
+    chosen = shuffled.slice(0, 5);
+  }
+  return chosen;
+}
+
+// Q-Net 국가기술자격 2026/2027 정기 전기기사 시험일정 및 D-Day 실시간 계산 엔진
+function getQNetSchedule(currentKST = getKSTDateString()) {
+  const schedules = [
+    {
+      session: "2026년 정기 기사 제1회",
+      written: {
+        docApp: "2026-01-12 ~ 2026-01-15",
+        examStart: "2026-02-07",
+        examEnd: "2026-03-03",
+        passDate: "2026-03-11"
+      },
+      practical: {
+        docApp: "2026-03-24 ~ 2026-03-27",
+        examStart: "2026-04-18",
+        examEnd: "2026-05-06",
+        passDate: "2026-06-12"
+      }
+    },
+    {
+      session: "2026년 정기 기사 제2회",
+      written: {
+        docApp: "2026-04-14 ~ 2026-04-17",
+        examStart: "2026-05-09",
+        examEnd: "2026-05-30",
+        passDate: "2026-06-10"
+      },
+      practical: {
+        docApp: "2026-06-23 ~ 2026-06-26",
+        examStart: "2026-07-18",
+        examEnd: "2026-08-05",
+        passDate: "2026-09-04"
+      }
+    },
+    {
+      session: "2026년 정기 기사 제3회",
+      written: {
+        docApp: "2026-07-28 ~ 2026-07-31",
+        examStart: "2026-08-22",
+        examEnd: "2026-09-12",
+        passDate: "2026-09-23"
+      },
+      practical: {
+        docApp: "2026-10-06 ~ 2026-10-09",
+        examStart: "2026-10-31",
+        examEnd: "2026-11-18",
+        passDate: "2026-12-18"
+      }
+    }
+  ];
+
+  const curDate = new Date(`${currentKST}T00:00:00+09:00`);
+
+  // Helper to calculate D-Day
+  function calcDDay(targetDateStr) {
+    const target = new Date(`${targetDateStr}T00:00:00+09:00`);
+    const diffMs = target - curDate;
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  }
+
+  // Find next closest written and practical exam
+  let nextWritten = null;
+  let nextPractical = null;
+
+  for (const s of schedules) {
+    const wDiff = calcDDay(s.written.examStart);
+    if (wDiff >= 0 && !nextWritten) {
+      nextWritten = {
+        session: s.session,
+        type: "필기시험",
+        examStart: s.written.examStart,
+        examEnd: s.written.examEnd,
+        docApp: s.written.docApp,
+        passDate: s.written.passDate,
+        dDay: wDiff
+      };
+    }
+    const pDiff = calcDDay(s.practical.examStart);
+    if (pDiff >= 0 && !nextPractical) {
+      nextPractical = {
+        session: s.session,
+        type: "실기시험",
+        examStart: s.practical.examStart,
+        examEnd: s.practical.examEnd,
+        docApp: s.practical.docApp,
+        passDate: s.practical.passDate,
+        dDay: pDiff
+      };
+    }
+  }
+
+  return {
+    kstDate: currentKST,
+    nextWritten: nextWritten || { session: "2027년 정기 기사 제1회", dDay: 90, examStart: "2027-02-06" },
+    nextPractical: nextPractical || { session: "2027년 정기 기사 제1회", dDay: 160, examStart: "2027-04-17" },
+    schedules: schedules,
+    official_source: "한국산업인력공단 Q-Net 국가기술자격 시험일정 (종목코드: 1150 전기기사)",
+    qnet_url: "https://www.q-net.or.kr/crf005.do?id=crf00505&gSite=Q&gId=&jmCd=1150",
+    kec_url: "https://www.kea.kr"
+  };
 }
 
 // MIME types
@@ -297,17 +447,56 @@ function createServerHandler() {
         });
       }
 
-      // 2. Daily Questions
+      // 2. Daily Questions (Supports track=written (default) and track=practical)
       if (pathname === "/api/questions/daily" && req.method === "GET") {
         const todayStr = parsedUrl.searchParams.get("date") || getKSTDateString();
         const roundNum = Math.max(1, parseInt(parsedUrl.searchParams.get("round") || "1", 10));
-        const daily = getDailyQuestions(todayStr, roundNum);
+        const track = (parsedUrl.searchParams.get("track") || "written").toLowerCase();
+        const daily = getDailyQuestions(todayStr, roundNum, track);
         return sendJSON(res, 200, {
           date: todayStr,
           round: roundNum,
+          track: track,
           total: daily.length,
           questions: daily
         });
+      }
+
+      // 2-1. Level-Graduated Questions (1~5 Level Daily Challenge)
+      if (pathname === "/api/questions/level" && req.method === "GET") {
+        const todayStr = parsedUrl.searchParams.get("date") || getKSTDateString();
+        const level = Math.max(1, Math.min(5, parseInt(parsedUrl.searchParams.get("level") || "1", 10)));
+        const roundNum = Math.max(1, parseInt(parsedUrl.searchParams.get("round") || "1", 10));
+        const track = (parsedUrl.searchParams.get("track") || "written").toLowerCase();
+        const questions = getLevelQuestions(level, roundNum, track, todayStr);
+        return sendJSON(res, 200, {
+          success: true,
+          date: todayStr,
+          level: level,
+          level_name: LEVEL_NAMES[level] || "개념/필수",
+          round: roundNum,
+          track: track,
+          total: questions.length,
+          questions: questions
+        });
+      }
+
+      // 2-2. Practical Track Questions (실기 전기설비설계 및 관리)
+      if (pathname === "/api/questions/practical" && req.method === "GET") {
+        const count = parseInt(parsedUrl.searchParams.get("count") || "10", 10);
+        const practicalPool = QUESTIONS.filter(q => q.subject_id === 6 || q.exam_track === "practical");
+        const shuffled = [...practicalPool].sort(() => Math.random() - 0.5);
+        return sendJSON(res, 200, {
+          track: "practical",
+          total: practicalPool.length,
+          questions: shuffled.slice(0, count)
+        });
+      }
+
+      // 2-3. Q-Net Public Exam Schedule & D-Day API
+      if (pathname === "/api/qnet-schedule" && (req.method === "GET" || req.method === "HEAD")) {
+        const scheduleData = getQNetSchedule();
+        return sendJSON(res, 200, scheduleData);
       }
 
       // 3. Practice Questions
@@ -386,8 +575,10 @@ function createServerHandler() {
             totalPoints: 0,
             todayScore: 0,
             maxRoundToday: 1,
+            maxRoundWritten: 1,
+            maxRoundPractical: 1,
             shieldCount: 0,
-            items: { eraser5050: 2, heart: 2, booster2x: 2 },
+            items: { eraser5050: 2, heart: 2, booster2x: 2, hint: 2, clover: 1, timemachine: 1, magnet: 1 },
             solvedQuestionIds: [],
             lastAttendance: "",
             history: [],
@@ -475,6 +666,12 @@ function createServerHandler() {
           if (typeof body.maxRoundToday === "number") {
             user.maxRoundToday = Math.max(user.maxRoundToday || 1, body.maxRoundToday);
           }
+          if (typeof body.maxRoundWritten === "number") {
+            user.maxRoundWritten = Math.max(user.maxRoundWritten || 1, body.maxRoundWritten);
+          }
+          if (typeof body.maxRoundPractical === "number") {
+            user.maxRoundPractical = Math.max(user.maxRoundPractical || 1, body.maxRoundPractical);
+          }
           if (body.lastAttendance) {
             user.lastAttendance = body.lastAttendance;
           }
@@ -488,9 +685,13 @@ function createServerHandler() {
           }
           if (body.items && typeof body.items === "object") {
             user.items = {
-              eraser5050: typeof body.items.eraser5050 === "number" ? body.items.eraser5050 : (user.items?.eraser5050 || 2),
-              heart: typeof body.items.heart === "number" ? body.items.heart : (user.items?.heart || 2),
-              booster2x: typeof body.items.booster2x === "number" ? body.items.booster2x : (user.items?.booster2x || 2)
+              eraser5050: typeof body.items.eraser5050 === "number" ? body.items.eraser5050 : (user.items?.eraser5050 ?? 2),
+              heart: typeof body.items.heart === "number" ? body.items.heart : (user.items?.heart ?? 2),
+              booster2x: typeof body.items.booster2x === "number" ? body.items.booster2x : (user.items?.booster2x ?? 2),
+              hint: typeof body.items.hint === "number" ? body.items.hint : (user.items?.hint ?? 2),
+              clover: typeof body.items.clover === "number" ? body.items.clover : (user.items?.clover ?? 1),
+              timemachine: typeof body.items.timemachine === "number" ? body.items.timemachine : (user.items?.timemachine ?? 1),
+              magnet: typeof body.items.magnet === "number" ? body.items.magnet : (user.items?.magnet ?? 1)
             };
           }
 
@@ -506,12 +707,14 @@ function createServerHandler() {
             totalPoints: user.totalPoints || 0,
             todayScore: user.todayScore || 0,
             maxRoundToday: user.maxRoundToday || 1,
+            maxRoundWritten: user.maxRoundWritten || user.maxRoundToday || 1,
+            maxRoundPractical: user.maxRoundPractical || 1,
             lastAttendance: user.lastAttendance,
             wrongQuestions: user.wrongQuestions,
             bookmarks: user.bookmarks,
             solvedQuestionIds: user.solvedQuestionIds || [],
             shieldCount: user.shieldCount || 0,
-            items: user.items || { eraser5050: 2, heart: 2, booster2x: 2 }
+            items: user.items || { eraser5050: 2, heart: 2, booster2x: 2, hint: 2, clover: 1, timemachine: 1, magnet: 1 }
           };
 
           return sendJSON(res, 200, {
@@ -521,6 +724,8 @@ function createServerHandler() {
             streak: user.streak,
             totalPoints: user.totalPoints || 0,
             maxRoundToday: user.maxRoundToday || 1,
+            maxRoundWritten: safeUser.maxRoundWritten,
+            maxRoundPractical: safeUser.maxRoundPractical,
             lastAttendance: user.lastAttendance,
             wrongQuestions: user.wrongQuestions,
             bookmarks: user.bookmarks
@@ -578,9 +783,11 @@ function createServerHandler() {
         return sendJSON(res, 200, { success: true, logs: logs.slice(-1000).reverse() });
       }
 
-      // 8-3. Leaderboard (Real users only, ranked by totalPoints descending)
+      // 8-3. Leaderboard (Real users only, segregated by track: written vs practical)
       if (pathname === "/api/leaderboard" && (req.method === "GET" || req.method === "HEAD")) {
         const db = loadDB();
+        const track = (parsedUrl.searchParams.get("track") || "written").toLowerCase();
+
         const list = Object.values(db.users).map(u => ({
           username: u.username,
           nickname: u.nickname || u.username,
@@ -588,20 +795,34 @@ function createServerHandler() {
           totalPoints: u.totalPoints || 0,
           todayScore: u.todayScore || 0,
           maxRoundToday: u.maxRoundToday || 1,
+          maxRoundWritten: u.maxRoundWritten || u.maxRoundToday || 1,
+          maxRoundPractical: u.maxRoundPractical || 1,
           totalSolved: (u.history || []).reduce((sum, h) => sum + (h.total || 0), 0)
         }));
 
-        list.sort((a, b) => {
-          if ((b.totalPoints || 0) !== (a.totalPoints || 0)) {
-            return (b.totalPoints || 0) - (a.totalPoints || 0);
-          }
-          if ((b.streak || 0) !== (a.streak || 0)) {
+        if (track === "practical") {
+          list.sort((a, b) => {
+            if ((b.maxRoundPractical || 1) !== (a.maxRoundPractical || 1)) {
+              return (b.maxRoundPractical || 1) - (a.maxRoundPractical || 1);
+            }
+            if ((b.totalPoints || 0) !== (a.totalPoints || 0)) {
+              return (b.totalPoints || 0) - (a.totalPoints || 0);
+            }
             return (b.streak || 0) - (a.streak || 0);
-          }
-          return (b.maxRoundToday || 1) - (a.maxRoundToday || 1);
-        });
+          });
+        } else {
+          list.sort((a, b) => {
+            if ((b.totalPoints || 0) !== (a.totalPoints || 0)) {
+              return (b.totalPoints || 0) - (a.totalPoints || 0);
+            }
+            if ((b.streak || 0) !== (a.streak || 0)) {
+              return (b.streak || 0) - (a.streak || 0);
+            }
+            return (b.maxRoundWritten || b.maxRoundToday || 1) - (a.maxRoundWritten || a.maxRoundToday || 1);
+          });
+        }
 
-        return sendJSON(res, 200, { success: true, leaderboard: list });
+        return sendJSON(res, 200, { success: true, track: track, leaderboard: list });
       }
 
       // 9. Git Sync (for Portainer webhook or manual sync)
@@ -616,7 +837,7 @@ function createServerHandler() {
 
       // 10. App Version & Mobile Auto-Update Check
       if (pathname === "/api/version" && (req.method === "GET" || req.method === "HEAD")) {
-        let verData = { version: "2.1.0", build: "20261115_0820" };
+        let verData = { version: "3.0.0", build: "20261116_1100" };
         try {
           const vFile = path.join(__dirname, "version.json");
           if (fs.existsSync(vFile)) {
