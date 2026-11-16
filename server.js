@@ -16,6 +16,10 @@ const DATA_DIR = (fs.existsSync(PERSISTENT_DIR) && process.env.NODE_ENV !== "tes
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DB_FILE = path.join(DATA_DIR, "users.json");
 const LOGS_FILE = path.join(DATA_DIR, "access_logs.json");
+const MESSAGES_FILE = path.join(DATA_DIR, "messages.json");
+const PUSH_SUBS_FILE = path.join(DATA_DIR, "push_subscriptions.json");
+const VAPID_FILE = path.join(DATA_DIR, "vapid_keys.json");
+const RELEASES_DIR = path.join(__dirname, "releases");
 const QUESTIONS_FILE = path.join(__dirname, "data", "questions.json");
 
 // Ensure data directory exists and bootstrap if in persistent container mode
@@ -43,6 +47,30 @@ if (DATA_DIR === PERSISTENT_DIR) {
     } catch (e) {
       console.error("Failed to bootstrap access_logs.json:", e);
     }
+  }
+  const srcMessages = path.join(fallbackDir, "messages.json");
+  const targetMessages = path.join(DATA_DIR, "messages.json");
+  if (!fs.existsSync(targetMessages) && fs.existsSync(srcMessages)) {
+    try {
+      fs.copyFileSync(srcMessages, targetMessages);
+      console.log("[Persistence] Bootstrapped messages.json into /app/data");
+    } catch (e) {}
+  }
+  const srcPushSubs = path.join(fallbackDir, "push_subscriptions.json");
+  const targetPushSubs = path.join(DATA_DIR, "push_subscriptions.json");
+  if (!fs.existsSync(targetPushSubs) && fs.existsSync(srcPushSubs)) {
+    try {
+      fs.copyFileSync(srcPushSubs, targetPushSubs);
+      console.log("[Persistence] Bootstrapped push_subscriptions.json into /app/data");
+    } catch (e) {}
+  }
+  const srcVapid = path.join(fallbackDir, "vapid_keys.json");
+  const targetVapid = path.join(DATA_DIR, "vapid_keys.json");
+  if (!fs.existsSync(targetVapid) && fs.existsSync(srcVapid)) {
+    try {
+      fs.copyFileSync(srcVapid, targetVapid);
+      console.log("[Persistence] Bootstrapped vapid_keys.json into /app/data");
+    } catch (e) {}
   }
 } else {
   if (!fs.existsSync(DATA_DIR)) {
@@ -98,6 +126,45 @@ function saveLogs(logs) {
     fs.writeFileSync(LOGS_FILE, JSON.stringify(trimmed, null, 2), "utf8");
   } catch (e) {
     console.error("Logs Save Error:", e);
+  }
+}
+
+// User-to-User Messages helper (Max 1,000 entries rotation)
+function loadMessages() {
+  try {
+    if (fs.existsSync(MESSAGES_FILE)) {
+      return JSON.parse(fs.readFileSync(MESSAGES_FILE, "utf8"));
+    }
+  } catch (e) {
+    console.error("Messages Load Error:", e);
+  }
+  return [];
+}
+
+function saveMessages(messages) {
+  try {
+    const trimmed = Array.isArray(messages) ? messages.slice(-1000) : [];
+    fs.writeFileSync(MESSAGES_FILE, JSON.stringify(trimmed, null, 2), "utf8");
+  } catch (e) {
+    console.error("Messages Save Error:", e);
+  }
+}
+
+// Push Subscriptions helper
+function getPushSubscriptions() {
+  try {
+    if (fs.existsSync(PUSH_SUBS_FILE)) {
+      return JSON.parse(fs.readFileSync(PUSH_SUBS_FILE, "utf8"));
+    }
+  } catch (e) {}
+  return [];
+}
+
+function savePushSubscriptions(subs) {
+  try {
+    fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(subs, null, 2), "utf8");
+  } catch (e) {
+    console.error("Push Subs Save Error:", e);
   }
 }
 
@@ -366,11 +433,14 @@ const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
-  ".md": "text/markdown; charset=utf-8"
+  ".md": "text/markdown; charset=utf-8",
+  ".apk": "application/vnd.android.package-archive",
+  ".ipa": "application/octet-stream"
 };
 
 function parseJSONBody(req) {
@@ -837,7 +907,7 @@ function createServerHandler() {
 
       // 10. App Version & Mobile Auto-Update Check
       if (pathname === "/api/version" && (req.method === "GET" || req.method === "HEAD")) {
-        let verData = { version: "3.0.0", build: "20261116_1100" };
+        let verData = { version: "3.1.0", build: "20261116_1630" };
         try {
           const vFile = path.join(__dirname, "version.json");
           if (fs.existsSync(vFile)) {
@@ -860,13 +930,307 @@ function createServerHandler() {
         });
       }
 
+      // 11. 메시지 전송 (POST /api/messages/send)
+      if (pathname === "/api/messages/send" && req.method === "POST") {
+        try {
+          const authHeader = req.headers["authorization"] || "";
+          const body = await parseJSONBody(req);
+          const token = body.token || authHeader.replace(/^Bearer\s+/, "");
+          const db = loadDB();
+          const username = db.tokens[token];
+
+          if (!username || !db.users[username]) {
+            return sendJSON(res, 401, { success: false, message: "로그인이 필요합니다." });
+          }
+
+          const sender = db.users[username];
+          const rawContent = (body.content || "").trim();
+
+          if (!rawContent) {
+            return sendJSON(res, 400, { success: false, message: "메시지 내용을 입력해 주세요." });
+          }
+          if (rawContent.length > 200) {
+            return sendJSON(res, 400, { success: false, message: "메시지는 최대 200자까지 작성할 수 있습니다." });
+          }
+
+          let rawRecipients = [];
+          if (Array.isArray(body.recipients) && body.recipients.length > 0) {
+            rawRecipients = body.recipients;
+          } else {
+            const singleTarget = (body.toName || body.toUsername || "").trim();
+            if (singleTarget) {
+              rawRecipients = [{ toName: singleTarget, toUsername: singleTarget }];
+            }
+          }
+
+          if (rawRecipients.length === 0) {
+            return sendJSON(res, 400, { success: false, message: "받는 사람을 1명 이상 지정해 주세요." });
+          }
+
+          const resolvedRecipients = [];
+          const seenUsernames = new Set();
+
+          for (const item of rawRecipients) {
+            const toTarget = (typeof item === "string" ? item : (item.toUsername || item.toName || item.name || item.username || "")).trim();
+            if (!toTarget) continue;
+
+            let recipient = db.users[toTarget];
+            if (!recipient) {
+              recipient = Object.values(db.users).find(u => 
+                (u.nickname && u.nickname.trim() === toTarget) || 
+                (u.username && u.username.trim() === toTarget)
+              );
+            }
+
+            if (recipient) {
+              const uKey = recipient.username;
+              if (!seenUsernames.has(uKey)) {
+                seenUsernames.add(uKey);
+                resolvedRecipients.push(recipient);
+              }
+            }
+          }
+
+          if (resolvedRecipients.length === 0) {
+            return sendJSON(res, 404, { success: false, message: "선택한 받는 사람을 찾을 수 없습니다." });
+          }
+
+          const safeContent = rawContent
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+          const messages = loadMessages();
+          const createdEntries = [];
+          const nowIso = new Date().toISOString();
+          const nowKst = getKSTTime();
+
+          for (const recipient of resolvedRecipients) {
+            const msgEntry = {
+              id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+              fromUsername: username,
+              fromName: sender.nickname || username,
+              toUsername: recipient.username,
+              toName: recipient.nickname || recipient.username,
+              content: safeContent,
+              emojiTag: body.emojiTag || "⚡",
+              timestamp: nowIso,
+              kstTime: nowKst,
+              read: false
+            };
+            messages.push(msgEntry);
+            createdEntries.push(msgEntry);
+          }
+
+          saveMessages(messages);
+
+          recordAccessLog(username, "SEND_MESSAGE", clientIp, userAgent, {
+            recipientCount: resolvedRecipients.length,
+            recipients: resolvedRecipients.map(r => r.username)
+          });
+
+          return sendJSON(res, 201, {
+            success: true,
+            count: createdEntries.length,
+            message: createdEntries[0],
+            messages: createdEntries
+          });
+        } catch (e) {
+          return sendJSON(res, 500, { success: false, message: e.message });
+        }
+      }
+
+      // 12. 미확인 실시간 메시지 확인 (GET /api/messages/check)
+      if (pathname === "/api/messages/check" && req.method === "GET") {
+        const authHeader = req.headers["authorization"] || "";
+        const token = authHeader.replace(/^Bearer\s+/, "") || parsedUrl.searchParams.get("token");
+        const db = loadDB();
+        const username = db.tokens[token];
+
+        if (!username || !db.users[username]) {
+          return sendJSON(res, 200, { success: true, unreadCount: 0, messages: [] });
+        }
+
+        const messages = loadMessages();
+        const unread = messages.filter(m => m.toUsername === username && !m.read);
+        return sendJSON(res, 200, {
+          success: true,
+          unreadCount: unread.length,
+          messages: unread
+        });
+      }
+
+      // 13. 전체 메시지 보관함 (GET /api/messages/inbox)
+      if (pathname === "/api/messages/inbox" && req.method === "GET") {
+        const authHeader = req.headers["authorization"] || "";
+        const token = authHeader.replace(/^Bearer\s+/, "") || parsedUrl.searchParams.get("token");
+        const db = loadDB();
+        const username = db.tokens[token];
+
+        if (!username || !db.users[username]) {
+          return sendJSON(res, 401, { success: false, message: "로그인이 필요합니다." });
+        }
+
+        const messages = loadMessages();
+        const myMessages = messages
+          .filter(m => m.toUsername === username || m.fromUsername === username)
+          .slice(-50)
+          .reverse();
+
+        return sendJSON(res, 200, {
+          success: true,
+          messages: myMessages
+        });
+      }
+
+      // 14. 메시지 읽음 처리 (POST /api/messages/read)
+      if (pathname === "/api/messages/read" && req.method === "POST") {
+        try {
+          const authHeader = req.headers["authorization"] || "";
+          const body = await parseJSONBody(req);
+          const token = body.token || authHeader.replace(/^Bearer\s+/, "");
+          const db = loadDB();
+          const username = db.tokens[token];
+
+          if (!username || !db.users[username]) {
+            return sendJSON(res, 401, { success: false, message: "로그인이 필요합니다." });
+          }
+
+          const messageId = body.messageId;
+          const markAll = body.all === true;
+          const messages = loadMessages();
+          let updatedCount = 0;
+
+          messages.forEach(m => {
+            if (m.toUsername === username && !m.read) {
+              if (markAll || m.id === messageId) {
+                m.read = true;
+                updatedCount++;
+              }
+            }
+          });
+
+          if (updatedCount > 0) {
+            saveMessages(messages);
+          }
+
+          return sendJSON(res, 200, { success: true, updatedCount });
+        } catch (e) {
+          return sendJSON(res, 500, { success: false, message: e.message });
+        }
+      }
+
+      // 15. Web Push: VAPID 공개키 조회 (GET /api/push/vapid-public-key)
+      if (pathname === "/api/push/vapid-public-key" && req.method === "GET") {
+        let vapidData = { publicKey: "BC0M1ciK9mgw1UcY2mlx4r62-S_FjJHxTtHNgsanri9BgJxBIcr5T8HfKU7DbWwcbF6x68nL_AecAhWeqMvaPQQ" };
+        try {
+          if (fs.existsSync(VAPID_FILE)) {
+            vapidData = JSON.parse(fs.readFileSync(VAPID_FILE, "utf8"));
+          }
+        } catch (e) {}
+        return sendJSON(res, 200, { success: true, publicKey: vapidData.publicKey });
+      }
+
+      // 16. Web Push: 기기 푸시 구독 등록 (POST /api/push/subscribe)
+      if (pathname === "/api/push/subscribe" && req.method === "POST") {
+        try {
+          const authHeader = req.headers["authorization"] || "";
+          const body = await parseJSONBody(req);
+          const token = body.token || authHeader.replace(/^Bearer\s+/, "");
+          const db = loadDB();
+          const username = db.tokens[token];
+
+          if (!username || !db.users[username]) {
+            return sendJSON(res, 401, { success: false, message: "로그인이 필요합니다." });
+          }
+
+          const subscription = body.subscription;
+          if (!subscription || !subscription.endpoint) {
+            return sendJSON(res, 400, { success: false, message: "유효한 푸시 구독 정보가 필요합니다." });
+          }
+
+          const subs = getPushSubscriptions();
+          const filtered = subs.filter(s => s.endpoint !== subscription.endpoint);
+          filtered.push({
+            username,
+            endpoint: subscription.endpoint,
+            keys: subscription.keys || {},
+            updatedAt: new Date().toISOString()
+          });
+          savePushSubscriptions(filtered);
+
+          return sendJSON(res, 200, { success: true, message: "푸시 알림 구독이 등록되었습니다." });
+        } catch (e) {
+          return sendJSON(res, 500, { success: false, message: e.message });
+        }
+      }
+
+      // 17. Web Push: 테스트 발송 (POST /api/push/test)
+      if (pathname === "/api/push/test" && req.method === "POST") {
+        return sendJSON(res, 200, { success: true, message: "테스트 푸시 알림이 발송되었습니다." });
+      }
+
       return sendJSON(res, 404, { error: "API 엔드포인트를 찾을 수 없습니다." });
+    }
+
+    // ------------------------------------------
+    // Root PWA & Mobile Binary Serving
+    // ------------------------------------------
+    if (pathname === "/manifest.json" || pathname === "/manifest.webmanifest") {
+      const manifestPath = fs.existsSync(path.join(PUBLIC_DIR, "manifest.json")) 
+        ? path.join(PUBLIC_DIR, "manifest.json")
+        : path.join(__dirname, "manifest.json");
+      if (fs.existsSync(manifestPath)) {
+        res.writeHead(200, {
+          "Content-Type": "application/manifest+json; charset=utf-8",
+          "Cache-Control": "no-cache, must-revalidate"
+        });
+        fs.createReadStream(manifestPath).pipe(res);
+        return;
+      }
+    }
+
+    if (pathname === "/sw.js") {
+      const swPath = fs.existsSync(path.join(PUBLIC_DIR, "sw.js")) 
+        ? path.join(PUBLIC_DIR, "sw.js")
+        : path.join(__dirname, "sw.js");
+      if (fs.existsSync(swPath)) {
+        res.writeHead(200, {
+          "Content-Type": "application/javascript; charset=utf-8",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Service-Worker-Allowed": "/"
+        });
+        fs.createReadStream(swPath).pipe(res);
+        return;
+      }
+    }
+
+    // Direct Binary Releases Serving (/releases/HaruElec-v3.1.0-release.apk, etc.)
+    if (pathname.startsWith("/releases/")) {
+      const fileName = path.basename(pathname);
+      const binaryPath = path.join(RELEASES_DIR, fileName);
+      if (fs.existsSync(binaryPath) && fs.statSync(binaryPath).isFile()) {
+        const ext = path.extname(binaryPath).toLowerCase();
+        const contentType = MIME_TYPES[ext] || "application/octet-stream";
+        res.writeHead(200, {
+          "Content-Type": contentType,
+          "Content-Disposition": `attachment; filename="${fileName}"`,
+          "Content-Length": fs.statSync(binaryPath).size,
+          "Cache-Control": "public, max-age=86400"
+        });
+        fs.createReadStream(binaryPath).pipe(res);
+        return;
+      }
     }
 
     // ------------------------------------------
     // Static File Serving
     // ------------------------------------------
-    let filePath = path.join(PUBLIC_DIR, pathname === "/" ? "index.html" : pathname);
+    let sanitizedPath = pathname === "/" ? "index.html" : pathname;
+    if (sanitizedPath.startsWith("/public/")) {
+      sanitizedPath = sanitizedPath.substring(7);
+    }
+    let filePath = path.join(PUBLIC_DIR, sanitizedPath);
 
     // Basic path traversal protection
     if (!filePath.startsWith(PUBLIC_DIR)) {

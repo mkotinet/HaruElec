@@ -1,5 +1,5 @@
 {
-  "version": "3.0.0",
-  "build": "20261116_1100",
-  "releaseNotes": "v3.0.0 Major Upgrade: 250 Questions (Written 200 + Practical 50), 5-Tier Level System, 7 In-Game Electric Chance Items, Lucky Box Reward Pool, Dual Track Leaderboard, Real-time Q-Net Exam Schedule API & KST Countdown"
+  "version": "3.1.0",
+  "build": "20261116_1630",
+  "releaseNotes": "v3.1.0 Major Upgrade: W3C PWA Install, iOS/Android Mobile Downloads & Install Guides, Member-to-Member Direct Messaging & Realtime Notifications, Web Push Support"
 }

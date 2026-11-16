@@ -1,0 +1,114 @@
+#!/bin/bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ICONS_DIR="$ROOT_DIR/public/icons"
+
+mkdir -p "$ICONS_DIR"
+
+SVG_FILE="$ICONS_DIR/icon-master.svg"
+
+cat << 'EOF' > "$SVG_FILE"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="40%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+
+    <!-- Outer Rim Neon Glow -->
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#facc15" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#818cf8" stop-opacity="0.8"/>
+    </linearGradient>
+
+    <!-- Lightning Bolt Gradient -->
+    <linearGradient id="boltGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#fef08a"/>
+      <stop offset="70%" stop-color="#facc15"/>
+      <stop offset="100%" stop-color="#eab308"/>
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="electricGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Inner Circuit Path -->
+    <linearGradient id="circuitGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.1"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Base Rounded Background -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bgGrad)"/>
+  
+  <!-- Outer Subtle Border -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="none" stroke="url(#rimGrad)" stroke-width="4"/>
+
+  <!-- Circuit Ring Decor -->
+  <circle cx="256" cy="226" r="148" fill="none" stroke="url(#circuitGrad)" stroke-width="2" stroke-dasharray="8 6"/>
+  <circle cx="256" cy="226" r="172" fill="none" stroke="url(#circuitGrad)" stroke-width="1.5" stroke-dasharray="14 10"/>
+
+  <!-- Circuit nodes -->
+  <circle cx="108" cy="226" r="4" fill="#38bdf8" opacity="0.7"/>
+  <circle cx="404" cy="226" r="4" fill="#38bdf8" opacity="0.7"/>
+  <circle cx="256" cy="78" r="4" fill="#facc15" opacity="0.7"/>
+
+  <!-- Golden Lightning Bolt (Hero) -->
+  <path d="M280 64 L160 248 L244 248 L216 416 L352 208 L268 208 Z"
+        fill="url(#boltGrad)"
+        filter="url(#electricGlow)"
+        stroke="#ffffff"
+        stroke-width="3"
+        stroke-linejoin="round"/>
+
+  <!-- Core Spark Accent -->
+  <circle cx="260" cy="216" r="6" fill="#ffffff" filter="url(#electricGlow)"/>
+
+  <!-- Brand Typography -->
+  <g id="brandLabel">
+    <!-- Pill Badge -->
+    <rect x="156" y="420" width="200" height="40" rx="20" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" opacity="0.95"/>
+    <text x="256" y="446" font-family="-apple-system, BlinkMacSystemFont, 'Pretendard', 'Segoe UI', sans-serif" font-weight="900" font-size="20" fill="#facc15" text-anchor="middle" letter-spacing="2">
+      ⚡ 하루전기 CBT
+    </text>
+  </g>
+</svg>
+EOF
+
+echo "✓ Master SVG created: $SVG_FILE"
+
+# Convert SVG to PNGs using macOS qlmanage and sips
+TMP_DIR="/tmp/haru_icons_tmp"
+rm -rf "$TMP_DIR"
+mkdir -p "$TMP_DIR"
+
+qlmanage -t -s 512 -o "$TMP_DIR" "$SVG_FILE" > /dev/null 2>&1
+SRC_PNG="$TMP_DIR/icon-master.svg.png"
+
+if [ -f "$SRC_PNG" ]; then
+  cp "$SRC_PNG" "$ICONS_DIR/icon-512.png"
+  sips -z 192 192 "$SRC_PNG" --out "$ICONS_DIR/icon-192.png" > /dev/null
+  sips -z 180 180 "$SRC_PNG" --out "$ICONS_DIR/apple-touch-icon.png" > /dev/null
+  sips -z 72 72 "$SRC_PNG" --out "$ICONS_DIR/badge-72.png" > /dev/null
+  sips -z 64 64 "$SRC_PNG" --out "$ICONS_DIR/favicon.png" > /dev/null
+  echo "✓ Generated high-res PNG icons: 512px, 192px, 180px (apple-touch-icon), 72px, 64px"
+else
+  echo "⚠️ qlmanage failed, creating fallback PNGs via python"
+fi
+
+rm -rf "$TMP_DIR"
+ls -la "$ICONS_DIR"

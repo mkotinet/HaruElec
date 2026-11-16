@@ -1,9 +1,21 @@
 {
+  "2": "build_questions.js",
   "6": "app.js",
-  "7": "ref_assert",
+  "7": "checkAppVersionUpdate",
   "8": "gamification_shield.test.js",
   "9": "playTone",
   "10": "build_250_questions.js",
   "11": "lucky_box.test.js",
-  "12": "selectUnsolvedFirstQuestions"
+  "12": "selectUnsolvedFirstQuestions",
+  "13": "manifest.json",
+  "14": "public/manifest.json",
+  "15": "frontend_lifecycle.test.js",
+  "16": "questions.test.js",
+  "17": "generate_mobile_binaries.py",
+  "18": "ref_fs",
+  "19": "ref_path",
+  "20": "openPwaGuideModal",
+  "21": "generate_pwa_icons.sh",
+  "22": "public/sw.js",
+  "23": "sw.js"
 }

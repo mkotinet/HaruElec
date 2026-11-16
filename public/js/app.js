@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const CURRENT_APP_VERSION = "3.0.0";
+  const CURRENT_APP_VERSION = "3.1.0";
 
   // KST Date Helper
   function getKSTDateString(dateObj = new Date()) {
@@ -125,7 +125,15 @@
     activeItemMagnet: false,
     activeItem5050Indices: [],
     lastSelectedWrongOption: null,
-    qnetSchedule: null
+    qnetSchedule: null,
+
+    // v3.1.0 PWA & Member Messaging State
+    deferredPwaPrompt: null,
+    currentRecipient: null,
+    inboxFilter: "all",
+    unreadMessagesCount: 0,
+    lastSeenMessageId: null,
+    inboxMessages: []
   };
 
   function recordQuestionSolved(qId) {
@@ -183,6 +191,10 @@
       this.playTone(523.25, 0.15, "sine", 0);     // C5
       this.playTone(659.25, 0.15, "sine", 0.12);  // E5
       this.playTone(783.99, 0.35, "sine", 0.24);  // G5
+    },
+    messageChime() {
+      this.playTone(587.33, 0.12, "sine", 0);     // D5
+      this.playTone(880.00, 0.25, "sine", 0.1);   // A5
     }
   };
 
@@ -321,7 +333,41 @@
     get shieldDecisionBox() { return $("shieldDecisionBox"); },
     get shieldDecisionCount() { return $("shieldDecisionCount"); },
     get btnUseShieldDefense() { return $("btnUseShieldDefense"); },
-    get btnDeclineShield() { return $("btnDeclineShield"); }
+    get btnDeclineShield() { return $("btnDeclineShield"); },
+
+    // v3.1.0 PWA & Member Messaging
+    get btnPwaInstall() { return $("btnPwaInstall"); },
+    get btnInbox() { return $("btnInbox"); },
+    get inboxUnreadBadge() { return $("inboxUnreadBadge"); },
+    get modalPwaGuide() { return $("modalPwaGuide"); },
+    get btnClosePwaGuide() { return $("btnClosePwaGuide"); },
+    get tabPwaAndroid() { return $("tabPwaAndroid"); },
+    get tabPwaIos() { return $("tabPwaIos"); },
+    get panelPwaAndroid() { return $("panelPwaAndroid"); },
+    get panelPwaIos() { return $("panelPwaIos"); },
+    get btnPwaPromptTrigger() { return $("btnPwaPromptTrigger"); },
+    get modalSendMessage() { return $("modalSendMessage"); },
+    get btnCloseSendMsg() { return $("btnCloseSendMsg"); },
+    get btnCancelSendMsg() { return $("btnCancelSendMsg"); },
+    get msgRecipientName() { return $("msgRecipientName"); },
+    get msgContentInput() { return $("msgContentInput"); },
+    get msgCharCount() { return $("msgCharCount"); },
+    get btnSendMsgSubmit() { return $("btnSendMsgSubmit"); },
+    get cheerChips() { return $$(".btn-cheer-chip"); },
+    get modalInbox() { return $("modalInbox"); },
+    get btnCloseInbox() { return $("btnCloseInbox"); },
+    get tabInboxAll() { return $("tabInboxAll"); },
+    get tabInboxReceived() { return $("tabInboxReceived"); },
+    get tabInboxSent() { return $("tabInboxSent"); },
+    get btnInboxMarkAllRead() { return $("btnInboxMarkAllRead"); },
+    get btnInboxNewMsg() { return $("btnInboxNewMsg"); },
+    get btnTogglePush() { return $("btnTogglePush"); },
+    get inboxMessageList() { return $("inboxMessageList"); },
+    get modalIncomingMessage() { return $("modalIncomingMessage"); },
+    get incomingSenderName() { return $("incomingSenderName"); },
+    get incomingContentBox() { return $("incomingContentBox"); },
+    get btnReplyIncoming() { return $("btnReplyIncoming"); },
+    get btnCloseIncoming() { return $("btnCloseIncoming"); }
   };
 
   // Toast Helper
@@ -1924,6 +1970,7 @@
             <td>
               <strong style="color: var(--text-main); font-size: 0.95rem;">${user.nickname || user.username}</strong>
               ${meTag}
+              ${!isMe ? `<button class="btn-table-cheer" data-user="${user.username}" data-name="${user.nickname || user.username}" title="응원 메시지 보내기" style="margin-left: 6px;">💌</button>` : ""}
             </td>
             <td style="text-align: center; color: var(--accent-elec); font-weight: 700;">
               ${user.streak || 0}일 🔥
@@ -1937,6 +1984,14 @@
           </tr>
         `;
       }).join("");
+
+      tableBody.querySelectorAll(".btn-table-cheer").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const u = btn.dataset.user;
+          const n = btn.dataset.name;
+          openSendMessageModal(n, u);
+        });
+      });
     } catch (e) {
       tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--accent-red);">랭킹 정보를 불러오지 못했습니다. 네트워크를 확인해 주세요.</td></tr>`;
     }
@@ -2042,6 +2097,357 @@
     } catch (e) {
       container.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 20px;">서버와 통신할 수 없습니다.</div>`;
     }
+  }
+
+  // ==========================================================
+  // v3.1.0 PWA & Mobile Installation Engine
+  // ==========================================================
+  function initPwa() {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").then((reg) => {
+          console.log("[PWA] Service Worker registered:", reg.scope);
+        }).catch((err) => {
+          console.warn("[PWA] Service Worker registration failed:", err);
+        });
+      });
+
+      navigator.serviceWorker.addEventListener("message", (event) => {
+        if (event.data && event.data.type === "HARUELEC_PUSH_RECEIVED") {
+          checkUnreadMessages();
+        } else if (event.data && event.data.type === "OPEN_INBOX") {
+          openInboxModal();
+        }
+      });
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        state.deferredPwaPrompt = e;
+        if (DOM.btnPwaInstall) {
+          DOM.btnPwaInstall.style.animation = "badgePulse 2s infinite ease-in-out";
+        }
+      });
+
+      window.addEventListener("appinstalled", () => {
+        state.deferredPwaPrompt = null;
+        showToast("🎉 하루전기 앱이 홈 화면에 성공적으로 설치되었습니다!");
+      });
+    }
+  }
+
+  function openPwaGuideModal(tab = "android") {
+    if (!DOM.modalPwaGuide) return;
+    DOM.modalPwaGuide.classList.remove("hidden");
+    switchPwaGuideTab(tab);
+  }
+
+  function switchPwaGuideTab(tab = "android") {
+    if (tab === "ios") {
+      if (DOM.tabPwaIos) DOM.tabPwaIos.classList.add("active");
+      if (DOM.tabPwaAndroid) DOM.tabPwaAndroid.classList.remove("active");
+      if (DOM.panelPwaIos) DOM.panelPwaIos.classList.remove("hidden");
+      if (DOM.panelPwaAndroid) DOM.panelPwaAndroid.classList.add("hidden");
+    } else {
+      if (DOM.tabPwaAndroid) DOM.tabPwaAndroid.classList.add("active");
+      if (DOM.tabPwaIos) DOM.tabPwaIos.classList.remove("active");
+      if (DOM.panelPwaAndroid) DOM.panelPwaAndroid.classList.remove("hidden");
+      if (DOM.panelPwaIos) DOM.panelPwaIos.classList.add("hidden");
+    }
+  }
+
+  async function triggerPwaPrompt() {
+    if (state.deferredPwaPrompt) {
+      state.deferredPwaPrompt.prompt();
+      const choice = await state.deferredPwaPrompt.userChoice;
+      if (choice.outcome === "accepted") {
+        showToast("앱 설치를 수락해 주셔서 감사합니다! ⚡");
+      }
+      state.deferredPwaPrompt = null;
+      if (DOM.modalPwaGuide) DOM.modalPwaGuide.classList.add("hidden");
+    } else {
+      showToast("브라우저 메뉴(⋮)에서 '홈 화면에 추가' 또는 '앱 설치'를 선택해 주세요.");
+    }
+  }
+
+  // ==========================================================
+  // v3.1.0 Member-to-Member Direct Messaging & Realtime Push
+  // ==========================================================
+  function openSendMessageModal(recipientName = "전체 수험생", recipientUsername = "") {
+    if (!state.user || !state.user.token) {
+      showToast("응원 메시지를 보내려면 먼저 로그인이 필요합니다.");
+      openAuthModal("login");
+      return;
+    }
+    state.currentRecipient = { name: recipientName, username: recipientUsername };
+    if (DOM.msgRecipientName) DOM.msgRecipientName.textContent = recipientName;
+    if (DOM.msgContentInput) {
+      DOM.msgContentInput.value = "";
+      if (DOM.msgCharCount) DOM.msgCharCount.textContent = "0 / 200자";
+    }
+    if (DOM.modalSendMessage) DOM.modalSendMessage.classList.remove("hidden");
+  }
+
+  async function handleSendMessageSubmit() {
+    if (!state.user || !state.user.token) {
+      showToast("로그인이 필요합니다.");
+      return;
+    }
+    const content = (DOM.msgContentInput ? DOM.msgContentInput.value : "").trim();
+    if (!content) {
+      showToast("메시지 내용을 입력해 주세요.");
+      return;
+    }
+    const recipient = state.currentRecipient || { username: "" };
+    try {
+      const res = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${state.user.token}`
+        },
+        body: JSON.stringify({
+          toUsername: recipient.username || recipient.name || "",
+          toName: recipient.name || "",
+          content: content,
+          emojiTag: "⚡"
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.message || "메시지 발송에 실패했습니다.");
+        return;
+      }
+      showToast("💌 응원 메시지가 성공적으로 발송되었습니다!");
+      if (DOM.modalSendMessage) DOM.modalSendMessage.classList.add("hidden");
+      if (DOM.msgContentInput) DOM.msgContentInput.value = "";
+      if (DOM.modalInbox && !DOM.modalInbox.classList.contains("hidden")) {
+        loadInboxMessages(state.inboxFilter);
+      }
+    } catch (e) {
+      showToast("메시지 발송 중 오류가 발생했습니다.");
+    }
+  }
+
+  async function checkUnreadMessages() {
+    if (!state.user || !state.user.token) {
+      if (DOM.inboxUnreadBadge) DOM.inboxUnreadBadge.classList.add("hidden");
+      return;
+    }
+    try {
+      const res = await fetch("/api/messages/check", {
+        headers: { "Authorization": `Bearer ${state.user.token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const count = data.unreadCount || 0;
+      state.unreadMessagesCount = count;
+
+      if (DOM.inboxUnreadBadge) {
+        if (count > 0) {
+          DOM.inboxUnreadBadge.textContent = count > 99 ? "99+" : count;
+          DOM.inboxUnreadBadge.classList.remove("hidden");
+        } else {
+          DOM.inboxUnreadBadge.classList.add("hidden");
+        }
+      }
+
+      if (typeof navigator !== "undefined" && "setAppBadge" in navigator) {
+        if (count > 0) navigator.setAppBadge(count).catch(() => {});
+        else navigator.clearAppBadge().catch(() => {});
+      }
+
+      if (Array.isArray(data.messages) && data.messages.length > 0) {
+        const latestMsg = data.messages[0];
+        if (state.lastSeenMessageId !== latestMsg.id) {
+          state.lastSeenMessageId = latestMsg.id;
+          sound.messageChime();
+          showIncomingMessagePopup(latestMsg);
+        }
+      }
+    } catch (e) {}
+  }
+
+  function showIncomingMessagePopup(msg) {
+    if (!DOM.modalIncomingMessage || !msg) return;
+    if (DOM.incomingSenderName) DOM.incomingSenderName.textContent = msg.fromName || msg.fromUsername;
+    if (DOM.incomingContentBox) DOM.incomingContentBox.textContent = msg.content;
+    DOM.modalIncomingMessage.classList.remove("hidden");
+
+    if (DOM.btnReplyIncoming) {
+      DOM.btnReplyIncoming.onclick = () => {
+        DOM.modalIncomingMessage.classList.add("hidden");
+        openSendMessageModal(msg.fromName || msg.fromUsername, msg.fromUsername);
+      };
+    }
+  }
+
+  function openInboxModal() {
+    if (!state.user || !state.user.token) {
+      showToast("메시지 보관함을 확인하려면 로그인이 필요합니다.");
+      openAuthModal("login");
+      return;
+    }
+    if (DOM.modalInbox) DOM.modalInbox.classList.remove("hidden");
+    loadInboxMessages("all");
+    updatePushToggleUI();
+  }
+
+  async function loadInboxMessages(filter = "all") {
+    state.inboxFilter = filter;
+    if (DOM.tabInboxAll) DOM.tabInboxAll.classList.toggle("active", filter === "all");
+    if (DOM.tabInboxReceived) DOM.tabInboxReceived.classList.toggle("active", filter === "received");
+    if (DOM.tabInboxSent) DOM.tabInboxSent.classList.toggle("active", filter === "sent");
+
+    if (!DOM.inboxMessageList) return;
+    DOM.inboxMessageList.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 30px;">메시지 목록을 불러오는 중...</div>`;
+
+    if (!state.user || !state.user.token) return;
+
+    try {
+      const res = await fetch("/api/messages/inbox", {
+        headers: { "Authorization": `Bearer ${state.user.token}` }
+      });
+      if (!res.ok) throw new Error("Inbox fetch failed");
+      const data = await res.json();
+      const allMsgs = data.messages || [];
+      state.inboxMessages = allMsgs;
+
+      let filtered = allMsgs;
+      if (filter === "received") {
+        filtered = allMsgs.filter(m => m.toUsername === state.user.username);
+      } else if (filter === "sent") {
+        filtered = allMsgs.filter(m => m.fromUsername === state.user.username);
+      }
+
+      if (filtered.length === 0) {
+        DOM.inboxMessageList.innerHTML = `
+          <div style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+            <div style="font-size: 2.2rem; margin-bottom: 8px;">📬</div>
+            <strong>도착한 응원 메시지가 아직 없습니다.</strong>
+            <p style="font-size: 0.8rem; margin-top: 4px;">명예의 전당에서 다른 수험생에게 먼저 따뜻한 응원을 보내보세요!</p>
+          </div>
+        `;
+        return;
+      }
+
+      DOM.inboxMessageList.innerHTML = filtered.map(m => {
+        const isReceived = m.toUsername === state.user.username;
+        const targetLabel = isReceived ? `보낸 수험생: ${m.fromName || m.fromUsername}` : `받는 수험생: ${m.toName || m.toUsername}`;
+        const isUnread = isReceived && !m.read;
+
+        return `
+          <div class="inbox-msg-card ${isUnread ? "unread" : ""}" data-id="${m.id}">
+            <div class="inbox-msg-header">
+              <span class="inbox-msg-sender">
+                ${isReceived ? "📥 " : "📤 "} ${targetLabel}
+              </span>
+              <span class="inbox-msg-time">${m.kstTime ? m.kstTime.substring(5, 16) : ""}</span>
+            </div>
+            <div class="inbox-msg-body">${m.content}</div>
+            <div class="inbox-msg-footer">
+              ${isReceived ? `<button class="btn btn-outline-sm btn-reply-msg" data-sender="${m.fromUsername}" data-name="${m.fromName || m.fromUsername}" style="font-size: 0.76rem; padding: 2px 8px;">💌 답장</button>` : ""}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      DOM.inboxMessageList.querySelectorAll(".btn-reply-msg").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const sName = btn.dataset.name;
+          const sUser = btn.dataset.sender;
+          if (DOM.modalInbox) DOM.modalInbox.classList.add("hidden");
+          openSendMessageModal(sName, sUser);
+        });
+      });
+    } catch (e) {
+      DOM.inboxMessageList.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 20px;">메시지 목록을 불러오지 못했습니다.</div>`;
+    }
+  }
+
+  async function markAllMessagesRead() {
+    if (!state.user || !state.user.token) return;
+    try {
+      await fetch("/api/messages/read", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${state.user.token}`
+        },
+        body: JSON.stringify({ all: true })
+      });
+      showToast("모든 메시지를 읽음 처리했습니다.");
+      checkUnreadMessages();
+      loadInboxMessages(state.inboxFilter);
+    } catch (e) {}
+  }
+
+  function updatePushToggleUI() {
+    if (!DOM.btnTogglePush) return;
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      DOM.btnTogglePush.textContent = "알림 켜짐 ✓";
+      DOM.btnTogglePush.style.color = "var(--accent-elec)";
+      DOM.btnTogglePush.style.borderColor = "var(--accent-elec)";
+    } else {
+      DOM.btnTogglePush.textContent = "알림 켜기";
+      DOM.btnTogglePush.style.color = "#38bdf8";
+      DOM.btnTogglePush.style.borderColor = "#38bdf8";
+    }
+  }
+
+  async function handleTogglePush() {
+    if (typeof Notification === "undefined") {
+      showToast("이 브라우저는 웹 알림을 지원하지 않습니다.");
+      return;
+    }
+    if (Notification.permission === "granted") {
+      showToast("웹 푸시 알림이 이미 활성화되어 있습니다!");
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      showToast("🔔 실시간 응원 메시지 푸시 알림이 켜졌습니다!");
+      updatePushToggleUI();
+      if ("serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const vapidRes = await fetch("/api/push/vapid-public-key");
+          if (vapidRes.ok) {
+            const { publicKey } = await vapidRes.json();
+            const sub = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(publicKey)
+            });
+            if (state.user && state.user.token) {
+              await fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${state.user.token}`
+                },
+                body: JSON.stringify({ subscription: sub })
+              });
+            }
+          }
+        } catch (e) {
+          console.warn("[Push] Subscribe registration error:", e);
+        }
+      }
+    } else {
+      showToast("알림 권한이 차단되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
   }
 
   // Setup Event Listeners
@@ -2282,6 +2688,92 @@
       });
     }
 
+    // v3.1.0 PWA Install & Guide Modal
+    if (DOM.btnPwaInstall) {
+      DOM.btnPwaInstall.addEventListener("click", () => openPwaGuideModal("android"));
+    }
+    if (DOM.btnClosePwaGuide) {
+      DOM.btnClosePwaGuide.addEventListener("click", () => {
+        if (DOM.modalPwaGuide) DOM.modalPwaGuide.classList.add("hidden");
+      });
+    }
+    if (DOM.tabPwaAndroid) {
+      DOM.tabPwaAndroid.addEventListener("click", () => switchPwaGuideTab("android"));
+    }
+    if (DOM.tabPwaIos) {
+      DOM.tabPwaIos.addEventListener("click", () => switchPwaGuideTab("ios"));
+    }
+    if (DOM.btnPwaPromptTrigger) {
+      DOM.btnPwaPromptTrigger.addEventListener("click", triggerPwaPrompt);
+    }
+
+    // v3.1.0 Inbox & Member Messaging Modals
+    if (DOM.btnInbox) {
+      DOM.btnInbox.addEventListener("click", () => openInboxModal());
+    }
+    if (DOM.btnCloseInbox) {
+      DOM.btnCloseInbox.addEventListener("click", () => {
+        if (DOM.modalInbox) DOM.modalInbox.classList.add("hidden");
+      });
+    }
+    if (DOM.tabInboxAll) {
+      DOM.tabInboxAll.addEventListener("click", () => loadInboxMessages("all"));
+    }
+    if (DOM.tabInboxReceived) {
+      DOM.tabInboxReceived.addEventListener("click", () => loadInboxMessages("received"));
+    }
+    if (DOM.tabInboxSent) {
+      DOM.tabInboxSent.addEventListener("click", () => loadInboxMessages("sent"));
+    }
+    if (DOM.btnInboxMarkAllRead) {
+      DOM.btnInboxMarkAllRead.addEventListener("click", markAllMessagesRead);
+    }
+    if (DOM.btnInboxNewMsg) {
+      DOM.btnInboxNewMsg.addEventListener("click", () => openSendMessageModal("전체 수험생", ""));
+    }
+    if (DOM.btnTogglePush) {
+      DOM.btnTogglePush.addEventListener("click", handleTogglePush);
+    }
+
+    // Send Message Modal
+    if (DOM.btnCloseSendMsg) {
+      DOM.btnCloseSendMsg.addEventListener("click", () => {
+        if (DOM.modalSendMessage) DOM.modalSendMessage.classList.add("hidden");
+      });
+    }
+    if (DOM.btnCancelSendMsg) {
+      DOM.btnCancelSendMsg.addEventListener("click", () => {
+        if (DOM.modalSendMessage) DOM.modalSendMessage.classList.add("hidden");
+      });
+    }
+    if (DOM.btnSendMsgSubmit) {
+      DOM.btnSendMsgSubmit.addEventListener("click", handleSendMessageSubmit);
+    }
+    if (DOM.cheerChips && DOM.cheerChips.length > 0) {
+      DOM.cheerChips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          if (DOM.msgContentInput) {
+            DOM.msgContentInput.value = chip.textContent.trim();
+            if (DOM.msgCharCount) DOM.msgCharCount.textContent = `${DOM.msgContentInput.value.length} / 200`;
+            DOM.msgContentInput.focus();
+          }
+        });
+      });
+    }
+    if (DOM.msgContentInput) {
+      DOM.msgContentInput.addEventListener("input", () => {
+        const len = DOM.msgContentInput.value.length;
+        if (DOM.msgCharCount) DOM.msgCharCount.textContent = `${len} / 200`;
+      });
+    }
+
+    // Incoming Message Modal
+    if (DOM.btnCloseIncoming) {
+      DOM.btnCloseIncoming.addEventListener("click", () => {
+        if (DOM.modalIncomingMessage) DOM.modalIncomingMessage.classList.add("hidden");
+      });
+    }
+
     // 5 Mobile Lifecycle Watchers & Multitasking Persistence
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", () => {
@@ -2291,6 +2783,7 @@
           checkAppVersionUpdate();
           checkDateTransition();
           updateResumeQuizBanner();
+          checkUnreadMessages();
         }
       });
     }
@@ -2299,20 +2792,30 @@
         checkAppVersionUpdate();
         checkDateTransition();
         updateResumeQuizBanner();
+        checkUnreadMessages();
       });
       window.addEventListener("focus", () => {
         checkAppVersionUpdate();
         checkDateTransition();
         updateResumeQuizBanner();
+        checkUnreadMessages();
       });
       window.addEventListener("online", () => {
         checkAppVersionUpdate();
         syncWithServer();
+        checkUnreadMessages();
       });
       window.addEventListener("pagehide", () => saveActiveQuizSession());
       window.addEventListener("beforeunload", () => saveActiveQuizSession());
       setInterval(() => checkAppVersionUpdate(), 3 * 60 * 1000);
       setInterval(() => checkDateTransition(), 60000);
+
+      // Smart Polling for Unread Messages (every 4 seconds when tab is active)
+      setInterval(() => {
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          checkUnreadMessages();
+        }
+      }, 4000);
 
       // Web Audio First-Touch Unlock
       const unlock = () => sound.unlockAudio();
@@ -2332,6 +2835,7 @@
 
     loadLocalState();
     initEvents();
+    initPwa();
     updateDashboardStats();
     updateShieldBadge();
     updateItemUI();
@@ -2339,6 +2843,8 @@
     loadDailyQuestions();
     loadQNetSchedule();
     checkAppVersionUpdate();
+    checkUnreadMessages();
+    updatePushToggleUI();
   }
 
   if (typeof document !== "undefined") {

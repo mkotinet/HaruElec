@@ -3,11 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="app-version" content="2.1.0">
-  <title>⚡ 하루전기 (Haru Elec) - 전기기사 필기 데일리 10문제</title>
-  <meta name="description" content="매일 10문제로 완성하는 전기기사 필기 시험 문제은행 & 고품질 해설, 스마트 오답노트">
+  <meta name="app-version" content="3.1.0">
+  <title>⚡ 하루전기 (Haru Elec) - 전기기사 필기 & 실기 10문제 CBT</title>
+  <meta name="description" content="매일 10문제로 완성하는 전기기사 필기 & 실기 CBT 문제은행, KEC 해설 및 수험생 응원 메시지">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
   
+  <!-- PWA & Mobile Web App Meta -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="하루전기">
+  <link rel="apple-touch-icon" href="/public/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/public/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/public/icons/favicon.png">
+  <meta name="theme-color" content="#0f172a">
+
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +29,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
   <!-- App Stylesheet -->
-  <link rel="stylesheet" href="/css/style.css?v=2.1.0">
+  <link rel="stylesheet" href="/css/style.css?v=3.1.0">
 </head>
 <body>
   <!-- Header -->
@@ -52,6 +62,17 @@
         <!-- Hard Reload Page Button -->
         <button class="btn btn-outline-sm" id="btnReloadPage" title="최신 버전 새로고침" style="padding: 4px 8px;">
           🔄
+        </button>
+
+        <!-- PWA / Mobile Download & Install Button -->
+        <button class="btn btn-outline-sm" id="btnPwaInstall" title="모바일 앱 다운로드 및 설치 안내" style="padding: 4px 8px; border-color: #38bdf8; color: #38bdf8; font-weight: 700;">
+          📲 앱 설치
+        </button>
+
+        <!-- Messages Inbox Button with Unread Badge -->
+        <button class="btn btn-outline-sm btn-inbox-header" id="btnInbox" title="수험생 응원 메시지 우체통" style="padding: 4px 8px; position: relative;">
+          📬
+          <span id="inboxUnreadBadge" class="inbox-unread-badge hidden">0</span>
         </button>
 
         <button class="btn btn-outline-sm hidden" id="adminAuditBtn" style="border-color: #818cf8; color: #818cf8; margin-right: 2px;">
@@ -643,10 +664,181 @@
     </div>
   </div>
 
+  <!-- Mobile App Download & PWA Install Guide Modal -->
+  <div class="modal-overlay hidden" id="modalPwaGuide">
+    <div class="modal-card glass" style="max-width: 540px; width: 92%;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>📲</span> 모바일 앱 다운로드 & 설치 가이드
+        </h3>
+        <button class="btn-close" id="btnClosePwaGuide">✕</button>
+      </div>
+      <div class="pwa-guide-tabs" style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <button class="btn btn-tab active" id="tabPwaAndroid" style="flex: 1; padding: 10px; font-weight: 700;">🤖 안드로이드 (Android)</button>
+        <button class="btn btn-tab" id="tabPwaIos" style="flex: 1; padding: 10px; font-weight: 700;">🍎 아이폰 (iOS)</button>
+      </div>
+
+      <!-- Android Panel -->
+      <div class="pwa-panel" id="panelPwaAndroid">
+        <div class="pwa-download-box" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 14px; text-align: center;">
+          <div style="font-size: 2rem; margin-bottom: 6px;">🤖</div>
+          <strong style="font-size: 1.05rem; color: #38bdf8; display: block; margin-bottom: 4px;">안드로이드 완제품 APK 설치 파일</strong>
+          <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 12px;">DEX 바이트코드 컴파일 & 전자서명 완료 (0.44 MB)</span>
+          <a href="/releases/HaruElec-v3.1.0-release.apk" class="btn btn-primary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; font-weight: 700; border-radius: 20px; text-decoration: none;">
+            <span>📥</span> HaruElec-v3.1.0.apk 다운로드
+          </a>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+          <strong style="color: var(--accent-gold); font-size: 0.9rem; display: block; margin-bottom: 6px;">🌟 또는 1초 만에 Chrome 앱으로 홈 화면 추가 (PWA)</strong>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+            Chrome 브라우저에서 아래 버튼을 터치하여 바로 홈 화면에 독립형 앱으로 설치할 수 있습니다.
+          </p>
+          <button id="btnPwaPromptTrigger" class="btn btn-outline-sm" style="width: 100%; border-color: #38bdf8; color: #38bdf8; font-weight: 700; padding: 8px;">
+            📲 원클릭 홈 화면 앱 설치
+          </button>
+        </div>
+
+        <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; padding: 0 4px;">
+          * APK 다운로드 시 '출처를 알 수 없는 앱 허용'을 켜주시면 즉시 설치됩니다.
+        </div>
+      </div>
+
+      <!-- iOS Panel -->
+      <div class="pwa-panel hidden" id="panelPwaIos">
+        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 14px;">
+          <strong style="color: #f59e0b; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+            <span>🌟</span> [추천] Safari에서 10초 만에 네이티브 앱 추가 (0초 설치)
+          </strong>
+          <ol style="font-size: 0.84rem; color: var(--text-main); margin-left: 20px; line-height: 1.6; margin-bottom: 8px;">
+            <li>iPhone <strong>Safari</strong> 브라우저에서 <strong>https://elec.danminlove.com</strong> 접속</li>
+            <li>화면 하단 중앙의 <strong>[공유] 아이콘</strong>(네모 상자 위 화살표 ⎋) 터치</li>
+            <li>메뉴를 아래로 내려 <strong>[홈 화면에 추가]</strong>(+ 모양) 선택</li>
+            <li>우측 상단의 <strong>[추가]</strong> 터치 완료!</li>
+          </ol>
+          <span style="font-size: 0.78rem; color: var(--text-muted);">
+            ✓ 주소창 없는 100% 전체화면 네이티브 독립 앱으로 구동됩니다.
+          </span>
+        </div>
+
+        <div class="pwa-download-box" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 14px; text-align: center;">
+          <strong style="font-size: 0.9rem; color: var(--text-main); display: block; margin-bottom: 4px;">🍎 아이폰 IPA 직접 설치 파일 (.ipa)</strong>
+          <span style="font-size: 0.78rem; color: var(--text-muted); display: block; margin-bottom: 10px;">64-bit arm64 Mach-O & Web Bundle (Sideloadly / Scarlet 지원)</span>
+          <a href="/releases/HaruElec-v3.1.0.ipa" class="btn btn-secondary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; border-radius: 20px; text-decoration: none;">
+            <span>📥</span> HaruElec-v3.1.0.ipa 다운로드
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Send Message Modal -->
+  <div class="modal-overlay hidden" id="modalSendMessage">
+    <div class="modal-card glass" style="max-width: 480px; width: 92%;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>💌</span> 수험생 응원 메시지 보내기
+        </h3>
+        <button class="btn-close" id="btnCloseSendMsg">✕</button>
+      </div>
+      <div class="modal-body" style="padding-top: 10px;">
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 0.82rem; color: var(--text-muted); display: block; margin-bottom: 4px;">받는 수험생</label>
+          <div id="msgRecipientDisplay" style="background: rgba(255, 255, 255, 0.06); padding: 8px 12px; border-radius: 8px; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 6px;">
+            <span>⚡</span> <span id="msgRecipientName">전체 수험생</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 0.82rem; color: var(--text-muted); display: block; margin-bottom: 6px;">⚡ 원터치 빠른 응원 칩</label>
+          <div class="quick-cheer-chips" style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <button type="button" class="btn-cheer-chip">오늘도 파이팅! ⚡</button>
+            <button type="button" class="btn-cheer-chip">전기기사 동차합격 가자! 🏆</button>
+            <button type="button" class="btn-cheer-chip">KEC 만점 도전! 💡</button>
+            <button type="button" class="btn-cheer-chip">포기하지 마세요! 🔥</button>
+            <button type="button" class="btn-cheer-chip">100점 만점 축하해요! 🥇</button>
+            <button type="button" class="btn-cheer-chip">실기 단답도 완벽 마스터! 🛠️</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <label for="msgContentInput" style="font-size: 0.82rem; color: var(--text-muted); display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>메시지 내용</span>
+            <span id="msgCharCount">0 / 200자</span>
+          </label>
+          <textarea id="msgContentInput" maxlength="200" rows="3" placeholder="따뜻한 응원과 합격 격려의 한마디를 남겨보세요! (최대 200자)" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: white; padding: 10px; font-family: inherit; font-size: 0.9rem; resize: none;"></textarea>
+        </div>
+
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" class="btn btn-secondary" id="btnCancelSendMsg">취소</button>
+          <button type="button" class="btn btn-primary" id="btnSendMsgSubmit" style="font-weight: 700;">💌 응원 발송하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Messages Inbox Modal -->
+  <div class="modal-overlay hidden" id="modalInbox">
+    <div class="modal-card glass" style="max-width: 580px; width: 94%; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>📬</span> 수험생 응원 메시지 우체통
+        </h3>
+        <button class="btn-close" id="btnCloseInbox">✕</button>
+      </div>
+
+      <div class="inbox-top-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;">
+        <div class="inbox-filter-tabs" style="display: flex; gap: 6px;">
+          <button class="btn btn-tab-sm active" id="tabInboxAll">전체</button>
+          <button class="btn btn-tab-sm" id="tabInboxReceived">📥 받은 편지</button>
+          <button class="btn btn-tab-sm" id="tabInboxSent">📤 보낸 편지</button>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn btn-outline-sm" id="btnInboxMarkAllRead" title="모두 읽음 처리">✓ 모두 읽음</button>
+          <button class="btn btn-primary-sm" id="btnInboxNewMsg" style="background: var(--accent-gold); color: #000; font-weight: 700;">💌 새 메시지</button>
+        </div>
+      </div>
+
+      <!-- Web Push Card -->
+      <div class="inbox-push-card" id="inboxPushCard" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="font-size: 0.84rem;">
+          <strong style="color: #38bdf8; display: block;">🔔 실시간 웹 푸시 알림</strong>
+          <span style="font-size: 0.76rem; color: var(--text-muted);">앱이 닫혀 있어도 새 응원 메시지를 즉시 알려드립니다.</span>
+        </div>
+        <button id="btnTogglePush" class="btn btn-outline-sm" style="border-color: #38bdf8; color: #38bdf8; padding: 4px 10px; font-weight: 700;">
+          알림 켜기
+        </button>
+      </div>
+
+      <!-- Message List -->
+      <div id="inboxMessageList" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; min-height: 200px;">
+        <!-- Dynamically loaded messages -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Realtime Incoming Message Popup Modal -->
+  <div class="modal-overlay hidden" id="modalIncomingMessage">
+    <div class="modal-card glass" style="max-width: 400px; width: 90%; text-align: center; border: 2px solid var(--accent-gold); box-shadow: 0 0 30px rgba(245, 158, 11, 0.3);">
+      <div style="font-size: 3rem; margin-bottom: 6px; animation: bounceIn 0.5s ease;">💌</div>
+      <h3 style="color: var(--accent-gold); margin-bottom: 4px; font-size: 1.2rem;">새로운 응원 메시지 도착!</h3>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">
+        <span id="incomingSenderName" style="color: #38bdf8; font-weight: 700;">친구</span> 님이 보낸 메시지
+      </div>
+      <div id="incomingContentBox" style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 14px; margin-bottom: 16px; font-size: 0.95rem; line-height: 1.5; color: #ffffff; word-break: break-all;">
+        <!-- Incoming message content -->
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="btnReplyIncoming" class="btn btn-primary" style="flex: 1; font-weight: 800; padding: 10px;">💌 바로 답장하기</button>
+        <button id="btnCloseIncoming" class="btn btn-secondary" style="flex: 1; padding: 10px;">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification -->
   <div class="toast hidden" id="appToast">알림 메시지</div>
 
   <!-- App Script -->
-  <script src="/js/app.js?v=2.1.0"></script>
+  <script src="/js/app.js?v=3.1.0"></script>
 </body>
 </html>

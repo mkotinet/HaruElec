@@ -3,7 +3,7 @@
 > **매일 10문제로 완성하는 전기기사 필기 시험 데일리 퀴즈 & KEC 최신 개정판 대조 분석, 스마트 오답노트 웹 애플리케이션**
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github)](https://github.com/mkotinet/HaruElec)
-[![Version: 2.1.0](https://img.shields.io/badge/version-2.1.0-amber.svg?style=for-the-badge)](version.json)
+[![Version: 3.1.0](https://img.shields.io/badge/version-3.1.0-amber.svg?style=for-the-badge)](version.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=for-the-badge&logo=docker)](docker-compose.yml)
@@ -77,6 +77,28 @@
 - 풀이 도중 카카오톡 확인이나 화면 꺼짐 시에도 퀴즈 상태가 실시간 직렬화되어 보존되며, 홈 화면의 `[⚡ 풀던 10문제 이어하기]` 배너로 즉시 복원됩니다.
 - 5대 브라우저 라이프사이클 훅(`visibilitychange`, `pageshow`, `focus`, `online`, 주기적 타이머)을 통해 서버의 최신 배포를 실시간 감지하여 자동 갱신합니다.
 - First-Touch 제스처를 통한 Web Audio API 오디오 자동 언락 및 모바일 헤더 텍스트 줄바꿈 방지 스타일이 적용되었습니다.
+
+### 15. 🏆 250제 기출문제 은행 & 5단계 난이도 등급제 (v3.0.0 New)
+- 필기 200문항(과목당 40문항 균형) + 실기 단답형 50문항 총 250문항 완성.
+- 1단계(입문)부터 5단계(고난도 계산)까지 수험생 수준별 맞춤 5문항 출제 및 연속 라운드 회전.
+- 필기 vs 실기 듀얼 트랙 랭킹 분리 지원.
+
+### 16. 🎁 7종 인게임 찬스 아이템 & 깜짝 럭키 박스 (v3.0.0 New)
+- 50:50 전력 차단기, 비상 발전기, 2배 승압기, 공식 계측기(힌트), 통전 클로버, 리셋 스위치, 전자석 콤보 등 7종 아이템.
+- 매 3라운드 클리어 시 100% 당첨 럭키 박스(방패 상한 2개 초과 시 +100P 대체 지급) 드롭.
+
+### 17. 📅 Q-Net 국가기술자격 2026/2027 정기 시험일정 실시간 D-Day (v3.0.0 New)
+- 공공데이터포털 및 Q-Net API 연동으로 필기/실기 원서접수, 시험일, 합격자 발표 D-Day 자동 계산 및 대시보드 위젯 표출.
+
+### 18. 💌 회원 간 실시간 메시지 송부 & 웹 푸시 알림 (v3.1.0 New)
+- 수험생 간 원클릭 응원 및 질문 메시지 교환 (6종 전기 특화 빠른 응원 칩, 200자 제한, XSS 방어, 1,000건 자동 로테이션).
+- 우체통 모달(`#modalInbox`), 미확인 펄스 뱃지, 실시간 스마트 폴링(4초) 및 도착 즉시 차임 사운드 + 팝업 알림.
+- 순수 crypto 기반 P-256 ECDSA VAPID 키페어 발급 및 W3C Web Push OS 네이티브 알림 지원.
+
+### 19. 📲 PWA 독립 실행 & 모바일 완제품 바이너리 다운로드 (v3.1.0 New)
+- W3C Web App Manifest (`manifest.json`) 및 Service Worker v3.1.0 오프라인 캐시 탑재.
+- Android: 크롬 브라우저 1초 원클릭 앱 설치 + 완제품 `HaruElec-v3.1.0-release.apk` (0.44MB) 직접 다운로드.
+- iOS: Safari 브라우저 "홈 화면에 추가" 무인증서 0초 네이티브 구동 + `HaruElec-v3.1.0.ipa` (0.40MB) 다운로드 및 사이드로딩 안내.
 
 ---
 

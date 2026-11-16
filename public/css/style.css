@@ -1688,4 +1688,149 @@ body {
   font-weight: 700;
 }
 
+/* ==========================================================
+   v3.1.0 PWA Install & Member Messaging System Styles
+   ========================================================== */
+
+/* Header Inbox & PWA Buttons */
+.btn-inbox-header {
+  position: relative;
+  font-size: 1.05rem;
+  padding: 4px 8px !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+.inbox-unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--accent-red);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 800;
+  min-width: 17px;
+  height: 17px;
+  line-height: 17px;
+  border-radius: 9999px;
+  text-align: center;
+  padding: 0 4px;
+  border: 1.5px solid var(--bg-card);
+  animation: badgePulse 2s infinite ease-in-out;
+}
+@keyframes badgePulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* Quick Cheer Chips */
+.btn-cheer-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: var(--text-main);
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-cheer-chip:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  transform: translateY(-1px);
+}
+
+/* Inbox Tabs & Buttons */
+.btn-tab-sm {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-tab-sm.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+.btn-primary-sm {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Inbox Message Card */
+.inbox-msg-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+.inbox-msg-card.unread {
+  border-left: 3px solid var(--accent-cyan);
+  background: rgba(56, 189, 248, 0.05);
+}
+.inbox-msg-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+}
+.inbox-msg-sender {
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+.inbox-msg-time {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+.inbox-msg-body {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  word-break: break-word;
+}
+.inbox-msg-footer {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* Leaderboard Row Cheer Button */
+.btn-table-cheer {
+  background: rgba(255, 215, 0, 0.12);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  color: var(--accent-gold);
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.2s ease;
+}
+.btn-table-cheer:hover {
+  background: rgba(255, 215, 0, 0.25);
+  transform: scale(1.05);
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.05); opacity: 1; }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
 
