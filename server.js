@@ -8,19 +8,107 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const zlib = require("zlib");
-const { execSync } = require("child_process");
+const { execSync, execFile } = require("child_process");
 
 const PORT = parseInt(process.env.PORT || "80", 10);
 const PERSISTENT_DIR = "/app/data";
 const DATA_DIR = (fs.existsSync(PERSISTENT_DIR) && process.env.NODE_ENV !== "test") ? PERSISTENT_DIR : path.join(__dirname, "data");
-const PUBLIC_DIR = path.join(__dirname, "public");
+const PUBLIC_DIR = path.resolve(__dirname, "public");
 const DB_FILE = path.join(DATA_DIR, "users.json");
 const LOGS_FILE = path.join(DATA_DIR, "access_logs.json");
 const MESSAGES_FILE = path.join(DATA_DIR, "messages.json");
 const PUSH_SUBS_FILE = path.join(DATA_DIR, "push_subscriptions.json");
 const VAPID_FILE = path.join(DATA_DIR, "vapid_keys.json");
-const RELEASES_DIR = path.join(__dirname, "releases");
+const RELEASES_DIR = path.resolve(__dirname, "releases");
 const QUESTIONS_FILE = path.join(__dirname, "data", "questions.json");
+const VERSION_FILE = path.join(__dirname, "version.json");
+
+// Security headers applied to all HTTP responses
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "SAMEORIGIN",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+};
+
+const ALLOWED_CORS_ORIGINS = new Set([
+  "https://elec.danminlove.com",
+  "http://localhost",
+  "http://127.0.0.1"
+]);
+
+function getCorsOrigin(req) {
+  const origin = req && req.headers && req.headers.origin;
+  if (!origin) return null;
+  if (ALLOWED_CORS_ORIGINS.has(origin)) return origin;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
+  return null;
+}
+
+// Cache Git commit hash once at server startup (avoid event-loop-blocking execSync per request)
+let SERVER_GIT_COMMIT = "";
+try {
+  SERVER_GIT_COMMIT = execSync("git rev-parse --short HEAD", { cwd: __dirname, timeout: 1000 }).toString().trim();
+} catch (e) {}
+
+// Version metadata cache (re-reads only when version.json mtime changes)
+let versionCache = { mtimeMs: 0, data: { version: "3.3.0", build: "20261123_0620" } };
+function getVersionInfo() {
+  try {
+    if (fs.existsSync(VERSION_FILE)) {
+      const stat = fs.statSync(VERSION_FILE);
+      if (stat.mtimeMs !== versionCache.mtimeMs) {
+        const parsed = JSON.parse(fs.readFileSync(VERSION_FILE, "utf8"));
+        versionCache = { mtimeMs: stat.mtimeMs, data: parsed };
+      }
+    }
+  } catch (e) {}
+  return { ...versionCache.data, ...(SERVER_GIT_COMMIT ? { commit: SERVER_GIT_COMMIT } : {}) };
+}
+
+// Atomic JSON write helper (temp file + rename to prevent partial writes / corruption)
+function atomicWriteJSON(filePath, data) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 7)}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf8");
+  fs.renameSync(tmpPath, filePath);
+}
+
+// Simple in-memory IP Rate Limiter for auth endpoints (window: 15 min)
+const authRateMap = new Map();
+const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_MAX_ATTEMPTS = 20;
+
+function checkAuthRateLimit(ip) {
+  const now = Date.now();
+  const key = ip || "unknown";
+  let record = authRateMap.get(key);
+  if (!record || now - record.start > AUTH_RATE_WINDOW_MS) {
+    record = { count: 1, start: now };
+    authRateMap.set(key, record);
+    return true;
+  }
+  record.count++;
+  if (authRateMap.size > 5000) {
+    for (const [k, v] of authRateMap.entries()) {
+      if (now - v.start > AUTH_RATE_WINDOW_MS) authRateMap.delete(k);
+    }
+  }
+  return record.count <= AUTH_RATE_MAX_ATTEMPTS;
+}
+
+function escapeHtmlServer(str) {
+  return String(str == null ? "" : str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // Ensure data directory exists and bootstrap if in persistent container mode
 if (DATA_DIR === PERSISTENT_DIR) {
@@ -88,21 +176,33 @@ try {
   console.error("Failed to load questions.json:", e);
 }
 
-// In-memory / JSON Database helper
+// In-memory / JSON Database helper with mtime caching & atomic writes
+let dbCache = { mtimeMs: -1, data: null };
+
 function loadDB() {
   try {
     if (fs.existsSync(DB_FILE)) {
-      return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+      const stat = fs.statSync(DB_FILE);
+      if (dbCache.data && stat.mtimeMs === dbCache.mtimeMs) {
+        return dbCache.data;
+      }
+      const parsed = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+      dbCache = { mtimeMs: stat.mtimeMs, data: parsed };
+      return parsed;
     }
   } catch (e) {
     console.error("DB Load Error:", e);
   }
-  return { users: {}, tokens: {} };
+  const empty = { users: {}, tokens: {} };
+  dbCache = { mtimeMs: 0, data: empty };
+  return empty;
 }
 
 function saveDB(db) {
   try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf8");
+    atomicWriteJSON(DB_FILE, db);
+    const stat = fs.statSync(DB_FILE);
+    dbCache = { mtimeMs: stat.mtimeMs, data: db };
   } catch (e) {
     console.error("DB Save Error:", e);
   }
@@ -123,7 +223,7 @@ function loadLogs() {
 function saveLogs(logs) {
   try {
     const trimmed = logs.slice(-1000);
-    fs.writeFileSync(LOGS_FILE, JSON.stringify(trimmed, null, 2), "utf8");
+    atomicWriteJSON(LOGS_FILE, trimmed);
   } catch (e) {
     console.error("Logs Save Error:", e);
   }
@@ -144,7 +244,7 @@ function loadMessages() {
 function saveMessages(messages) {
   try {
     const trimmed = Array.isArray(messages) ? messages.slice(-1000) : [];
-    fs.writeFileSync(MESSAGES_FILE, JSON.stringify(trimmed, null, 2), "utf8");
+    atomicWriteJSON(MESSAGES_FILE, trimmed);
   } catch (e) {
     console.error("Messages Save Error:", e);
   }
@@ -162,7 +262,7 @@ function getPushSubscriptions() {
 
 function savePushSubscriptions(subs) {
   try {
-    fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(subs, null, 2), "utf8");
+    atomicWriteJSON(PUSH_SUBS_FILE, subs);
   } catch (e) {
     console.error("Push Subs Save Error:", e);
   }
@@ -217,8 +317,34 @@ function recordAccessLog(username, action, ip, userAgent, details = {}) {
   return entry;
 }
 
+function hashPasswordLegacy(password) {
+  return crypto.createHash("sha256").update(String(password) + "haru_elec_salt_2026").digest("hex");
+}
+
 function hashPassword(password) {
-  return crypto.createHash("sha256").update(password + "haru_elec_salt_2026").digest("hex");
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derived = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  return `scrypt:${salt}:${derived}`;
+}
+
+function verifyPassword(password, storedHash) {
+  if (!storedHash || typeof storedHash !== "string") return { valid: false, needsUpgrade: false };
+  if (storedHash.startsWith("scrypt:")) {
+    const parts = storedHash.split(":");
+    if (parts.length !== 3) return { valid: false, needsUpgrade: false };
+    const [, salt, expectedHex] = parts;
+    const derived = crypto.scryptSync(String(password), salt, 64);
+    const expected = Buffer.from(expectedHex, "hex");
+    if (derived.length !== expected.length) return { valid: false, needsUpgrade: false };
+    return { valid: crypto.timingSafeEqual(derived, expected), needsUpgrade: false };
+  }
+  // Legacy SHA-256 verification with constant-time compare + transparent upgrade flag
+  const legacyHex = hashPasswordLegacy(password);
+  const a = Buffer.from(legacyHex, "hex");
+  const b = Buffer.from(storedHash, "hex");
+  if (a.length !== b.length) return { valid: false, needsUpgrade: false };
+  const valid = crypto.timingSafeEqual(a, b);
+  return { valid, needsUpgrade: valid };
 }
 
 function generateToken() {
@@ -614,28 +740,57 @@ const MIME_TYPES = {
   ".ipa": "application/octet-stream"
 };
 
-function parseJSONBody(req) {
+const MAX_JSON_BODY_BYTES = 1024 * 1024; // 1 MB limit to prevent OOM DoS
+
+function parseJSONBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
   return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", chunk => body += chunk);
+    let totalBytes = 0;
+    const chunks = [];
+    let aborted = false;
+
+    req.on("data", chunk => {
+      if (aborted) return;
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) {
+        aborted = true;
+        const err = new Error("요청 본문이 허용 용량(1MB)을 초과했습니다.");
+        err.statusCode = 413;
+        req.destroy();
+        reject(err);
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => {
+      if (aborted) return;
       try {
+        const body = Buffer.concat(chunks).toString("utf8");
         resolve(body ? JSON.parse(body) : {});
       } catch (err) {
-        reject(new Error("Invalid JSON"));
+        const parseErr = new Error("Invalid JSON");
+        parseErr.statusCode = 400;
+        reject(parseErr);
       }
     });
-    req.on("error", reject);
+    req.on("error", err => {
+      if (!aborted) reject(err);
+    });
   });
 }
 
-function sendJSON(res, status, obj) {
-  res.writeHead(status, {
+function sendJSON(res, status, obj, req = null) {
+  const origin = getCorsOrigin(req || res.req);
+  const headers = {
+    ...SECURITY_HEADERS,
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD"
-  });
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
+    "Vary": "Origin"
+  };
+  if (origin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+  res.writeHead(status, headers);
   if (res.req && res.req.method === "HEAD") {
     res.end();
   } else {
@@ -647,6 +802,7 @@ function authenticate(req, db) {
   const authHeader = req.headers["authorization"] || "";
   if (!authHeader.startsWith("Bearer ")) return null;
   const token = authHeader.substring(7).trim();
+  if (!token) return null;
   const username = db.tokens[token];
   if (!username || !db.users[username]) return null;
   return { username, user: db.users[username], token };
@@ -662,16 +818,20 @@ function createServerHandler() {
 
     // CORS preflight
     if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
+      const origin = getCorsOrigin(req);
+      const preflightHeaders = {
+        ...SECURITY_HEADERS,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
-      });
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
+        "Vary": "Origin"
+      };
+      if (origin) {
+        preflightHeaders["Access-Control-Allow-Origin"] = origin;
+      }
+      res.writeHead(204, preflightHeaders);
       res.end();
       return;
     }
-
-    const db = loadDB();
 
     // ------------------------------------------
     // API Routes
@@ -679,10 +839,11 @@ function createServerHandler() {
     if (pathname.startsWith("/api/")) {
       // 1. Health
       if (pathname === "/api/health" && (req.method === "GET" || req.method === "HEAD")) {
+        const ver = getVersionInfo();
         return sendJSON(res, 200, {
           status: "ok",
           service: "HaruElec",
-          version: "2.1.0",
+          version: ver.version || "3.3.0",
           questionsLoaded: QUESTIONS.length,
           timestamp: new Date().toISOString()
         });
@@ -836,15 +997,40 @@ function createServerHandler() {
         });
       }
 
+      // 3-3. Questions by IDs (Lightweight Wrong Notes / Bookmarks Fetch)
+      if (pathname === "/api/questions/by-ids" && req.method === "POST") {
+        try {
+          const body = await parseJSONBody(req);
+          const idList = Array.isArray(body.ids) ? body.ids.map(n => parseInt(n, 10)).filter(n => !isNaN(n)) : [];
+          const idSet = new Set(idList);
+          const matched = QUESTIONS.filter(q => idSet.has(q.id));
+          return sendJSON(res, 200, {
+            success: true,
+            total: matched.length,
+            questions: matched
+          });
+        } catch (e) {
+          return sendJSON(res, e.statusCode || 400, { error: e.message });
+        }
+      }
+
       // 4. Auth: Register
       if (pathname === "/api/auth/register" && req.method === "POST") {
+        if (!checkAuthRateLimit(clientIp)) {
+          return sendJSON(res, 429, { error: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." });
+        }
         try {
           const body = await parseJSONBody(req);
           const { username, password, nickname } = body;
           if (!username || !password) {
             return sendJSON(res, 400, { error: "아이디와 비밀번호를 입력해주세요." });
           }
-          const trimmedUser = username.trim();
+          const trimmedUser = String(username).trim();
+          const trimmedNick = String(nickname || trimmedUser).trim().slice(0, 30);
+          if (trimmedUser.length < 2 || trimmedUser.length > 30) {
+            return sendJSON(res, 400, { error: "아이디는 2~30자로 입력해주세요." });
+          }
+          const db = loadDB();
           if (db.users[trimmedUser]) {
             return sendJSON(res, 409, { error: "이미 존재하는 아이디입니다." });
           }
@@ -853,7 +1039,7 @@ function createServerHandler() {
           const token = generateToken();
           const newUser = {
             username: trimmedUser,
-            nickname: (nickname || trimmedUser).trim(),
+            nickname: trimmedNick || trimmedUser,
             passwordHash,
             createdAt: new Date().toISOString(),
             streak: 0,
@@ -865,6 +1051,7 @@ function createServerHandler() {
             shieldCount: 0,
             items: { eraser5050: 2, heart: 2, booster2x: 2, hint: 2, clover: 1, timemachine: 1, magnet: 1 },
             solvedQuestionIds: [],
+            subjectStats: {},
             lastAttendance: "",
             history: [],
             wrongQuestions: [],
@@ -880,20 +1067,30 @@ function createServerHandler() {
           const { passwordHash: _, ...safeUser } = newUser;
           return sendJSON(res, 200, { message: "회원가입 완료", token, user: safeUser });
         } catch (e) {
-          return sendJSON(res, 400, { error: e.message });
+          return sendJSON(res, e.statusCode || 400, { error: e.message });
         }
       }
 
       // 5. Auth: Login
       if (pathname === "/api/auth/login" && req.method === "POST") {
+        if (!checkAuthRateLimit(clientIp)) {
+          return sendJSON(res, 429, { error: "로그인 시도가 너무 많습니다. 15분 후 다시 시도해 주세요." });
+        }
         try {
           const body = await parseJSONBody(req);
           const { username, password } = body;
-          const trimmedUser = (username || "").trim();
+          const trimmedUser = String(username || "").trim();
+          const db = loadDB();
           const user = db.users[trimmedUser];
-          if (!user || user.passwordHash !== hashPassword(password)) {
+          const verification = user ? verifyPassword(password || "", user.passwordHash) : { valid: false, needsUpgrade: false };
+          if (!user || !verification.valid) {
             recordAccessLog(trimmedUser, "LOGIN_FAIL", clientIp, userAgent, { reason: "인증 실패" });
             return sendJSON(res, 401, { error: "아이디 또는 비밀번호가 일치하지 않습니다." });
+          }
+
+          // Transparently upgrade legacy SHA-256 hash to scrypt on valid login
+          if (verification.needsUpgrade) {
+            user.passwordHash = hashPassword(password);
           }
 
           const token = generateToken();
@@ -905,12 +1102,13 @@ function createServerHandler() {
           const { passwordHash: _, ...safeUser } = user;
           return sendJSON(res, 200, { message: "로그인 성공", token, user: safeUser });
         } catch (e) {
-          return sendJSON(res, 400, { error: e.message });
+          return sendJSON(res, e.statusCode || 400, { error: e.message });
         }
       }
 
       // 6. Auth: Me
       if (pathname === "/api/auth/me" && req.method === "GET") {
+        const db = loadDB();
         const auth = authenticate(req, db);
         if (!auth) {
           return sendJSON(res, 401, { error: "인증이 유효하지 않습니다." });
@@ -919,8 +1117,27 @@ function createServerHandler() {
         return sendJSON(res, 200, { user: safeUser });
       }
 
+      // 6-1. Registered Recipients List (for Send Message Modal)
+      if (pathname === "/api/users/recipients" && req.method === "GET") {
+        const db = loadDB();
+        const auth = authenticate(req, db);
+        if (!auth) {
+          return sendJSON(res, 401, { success: false, error: "로그인이 필요합니다." });
+        }
+        const recipients = Object.values(db.users)
+          .filter(u => u.username !== auth.username)
+          .slice(-100)
+          .reverse()
+          .map(u => ({
+            username: u.username,
+            nickname: u.nickname || u.username
+          }));
+        return sendJSON(res, 200, { success: true, recipients });
+      }
+
       // 7. User Progress Sync
       if (pathname === "/api/user/sync" && req.method === "POST") {
+        const db = loadDB();
         const auth = authenticate(req, db);
         if (!auth) {
           return sendJSON(res, 401, { error: "인증이 필요합니다." });
@@ -965,6 +1182,18 @@ function createServerHandler() {
             body.solvedQuestionIds.forEach(id => set.add(id));
             user.solvedQuestionIds = Array.from(set);
           }
+          if (body.subjectStats && typeof body.subjectStats === "object") {
+            user.subjectStats = user.subjectStats || {};
+            for (const [subId, st] of Object.entries(body.subjectStats)) {
+              if (st && typeof st.total === "number" && typeof st.correct === "number") {
+                const prev = user.subjectStats[subId] || { correct: 0, total: 0 };
+                user.subjectStats[subId] = {
+                  correct: Math.max(prev.correct || 0, st.correct),
+                  total: Math.max(prev.total || 0, st.total)
+                };
+              }
+            }
+          }
           if (typeof body.shieldCount === "number") {
             user.shieldCount = Math.max(0, Math.min(2, body.shieldCount));
           }
@@ -998,6 +1227,7 @@ function createServerHandler() {
             wrongQuestions: user.wrongQuestions,
             bookmarks: user.bookmarks,
             solvedQuestionIds: user.solvedQuestionIds || [],
+            subjectStats: user.subjectStats || {},
             shieldCount: user.shieldCount || 0,
             items: user.items || { eraser5050: 2, heart: 2, booster2x: 2, hint: 2, clover: 1, timemachine: 1, magnet: 1 }
           };
@@ -1016,12 +1246,13 @@ function createServerHandler() {
             bookmarks: user.bookmarks
           });
         } catch (e) {
-          return sendJSON(res, 400, { error: e.message });
+          return sendJSON(res, e.statusCode || 400, { error: e.message });
         }
       }
 
       // 8. User Stats
       if (pathname === "/api/user/stats" && req.method === "GET") {
+        const db = loadDB();
         const auth = authenticate(req, db);
         if (!auth) {
           return sendJSON(res, 401, { error: "인증이 필요합니다." });
@@ -1037,18 +1268,22 @@ function createServerHandler() {
           streak: user.streak || 0,
           totalPoints: user.totalPoints || 0,
           maxRoundToday: user.maxRoundToday || 1,
+          maxRoundWritten: user.maxRoundWritten || user.maxRoundToday || 1,
+          maxRoundPractical: user.maxRoundPractical || 1,
           lastAttendance: user.lastAttendance || "",
           totalDays: history.length,
           totalSolved,
           totalCorrect,
           overallAccuracy: totalSolved > 0 ? Math.round((totalCorrect / totalSolved) * 100) : 0,
           wrongCount: (user.wrongQuestions || []).length,
-          bookmarkCount: (user.bookmarks || []).length
+          bookmarkCount: (user.bookmarks || []).length,
+          subjectStats: user.subjectStats || {}
         });
       }
 
       // 8-1. User Logs (Recent 30 logs for current user)
       if (pathname === "/api/user/logs" && req.method === "GET") {
+        const db = loadDB();
         const auth = authenticate(req, db);
         if (!auth) {
           return sendJSON(res, 401, { success: false, error: "로그인이 필요합니다." });
@@ -1060,6 +1295,7 @@ function createServerHandler() {
 
       // 8-2. Admin Audit Logs (Recent 1,000 logs, restricted strictly to '단민러브')
       if (pathname === "/api/admin/logs" && req.method === "GET") {
+        const db = loadDB();
         const auth = authenticate(req, db);
         if (!auth || auth.username !== "단민러브") {
           return sendJSON(res, 403, { success: false, error: "관리자('단민러브') 권한이 필요합니다." });
@@ -1110,31 +1346,27 @@ function createServerHandler() {
         return sendJSON(res, 200, { success: true, track: track, leaderboard: list });
       }
 
-      // 9. Git Sync (for Portainer webhook or manual sync)
+      // 9. Git Sync (Admin-only, non-blocking async execFile with --rebase)
       if (pathname === "/api/sync/github" && req.method === "POST") {
-        try {
-          const output = execSync("git pull origin main 2>&1", { cwd: __dirname }).toString();
-          return sendJSON(res, 200, { message: "Git pull completed", output });
-        } catch (e) {
-          return sendJSON(res, 500, { error: "Git sync failed", details: e.message });
+        const db = loadDB();
+        const auth = authenticate(req, db);
+        if (!auth || auth.username !== "단민러브") {
+          return sendJSON(res, 403, { success: false, error: "관리자('단민러브') 권한이 필요합니다." });
         }
+        execFile("git", ["pull", "--rebase", "origin", "main"], { cwd: __dirname, timeout: 15000 }, (err, stdout, stderr) => {
+          if (err) {
+            console.error("[Git Sync Error]", err.message);
+            return sendJSON(res, 500, { success: false, error: "Git 동기화에 실패했습니다." });
+          }
+          recordAccessLog(auth.username, "GIT_SYNC", clientIp, userAgent, {});
+          return sendJSON(res, 200, { success: true, message: "Git pull completed", output: (stdout || stderr || "").trim() });
+        });
+        return;
       }
 
-      // 10. App Version & Mobile Auto-Update Check
+      // 10. App Version & Mobile Auto-Update Check (Zero-blocking cached)
       if (pathname === "/api/version" && (req.method === "GET" || req.method === "HEAD")) {
-        let verData = { version: "3.2.0", build: "20261117_0700" };
-        try {
-          const vFile = path.join(__dirname, "version.json");
-          if (fs.existsSync(vFile)) {
-            verData = JSON.parse(fs.readFileSync(vFile, "utf8"));
-          }
-        } catch (e) {}
-
-        try {
-          const commit = execSync("git rev-parse --short HEAD", { timeout: 1000 }).toString().trim();
-          if (commit) verData.commit = commit;
-        } catch (e) {}
-
+        const verData = getVersionInfo();
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");
@@ -1150,7 +1382,7 @@ function createServerHandler() {
         try {
           const authHeader = req.headers["authorization"] || "";
           const body = await parseJSONBody(req);
-          const token = body.token || authHeader.replace(/^Bearer\s+/, "");
+          const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : (body.token || "");
           const db = loadDB();
           const username = db.tokens[token];
 
@@ -1159,7 +1391,7 @@ function createServerHandler() {
           }
 
           const sender = db.users[username];
-          const rawContent = (body.content || "").trim();
+          const rawContent = String(body.content || "").trim();
 
           if (!rawContent) {
             return sendJSON(res, 400, { success: false, message: "메시지 내용을 입력해 주세요." });
@@ -1172,7 +1404,7 @@ function createServerHandler() {
           if (Array.isArray(body.recipients) && body.recipients.length > 0) {
             rawRecipients = body.recipients;
           } else {
-            const singleTarget = (body.toName || body.toUsername || "").trim();
+            const singleTarget = String(body.toUsername || body.toName || "").trim();
             if (singleTarget) {
               rawRecipients = [{ toName: singleTarget, toUsername: singleTarget }];
             }
@@ -1186,13 +1418,27 @@ function createServerHandler() {
           const seenUsernames = new Set();
 
           for (const item of rawRecipients) {
-            const toTarget = (typeof item === "string" ? item : (item.toUsername || item.toName || item.name || item.username || "")).trim();
+            const toTarget = String(typeof item === "string" ? item : (item.toUsername || item.toName || item.name || item.username || "")).trim();
             if (!toTarget) continue;
+
+            // Broadcast to all registered members (excluding sender, most recent 50)
+            if (toTarget === "전체 수험생" || toTarget === "__ALL__") {
+              const allTargets = Object.values(db.users)
+                .filter(u => u.username !== username)
+                .slice(-50);
+              for (const u of allTargets) {
+                if (!seenUsernames.has(u.username)) {
+                  seenUsernames.add(u.username);
+                  resolvedRecipients.push(u);
+                }
+              }
+              continue;
+            }
 
             let recipient = db.users[toTarget];
             if (!recipient) {
-              recipient = Object.values(db.users).find(u => 
-                (u.nickname && u.nickname.trim() === toTarget) || 
+              recipient = Object.values(db.users).find(u =>
+                (u.nickname && u.nickname.trim() === toTarget) ||
                 (u.username && u.username.trim() === toTarget)
               );
             }
@@ -1210,11 +1456,7 @@ function createServerHandler() {
             return sendJSON(res, 404, { success: false, message: "선택한 받는 사람을 찾을 수 없습니다." });
           }
 
-          const safeContent = rawContent
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-
+          const safeContent = escapeHtmlServer(rawContent);
           const messages = loadMessages();
           const createdEntries = [];
           const nowIso = new Date().toISOString();
@@ -1228,7 +1470,7 @@ function createServerHandler() {
               toUsername: recipient.username,
               toName: recipient.nickname || recipient.username,
               content: safeContent,
-              emojiTag: body.emojiTag || "⚡",
+              emojiTag: String(body.emojiTag || "⚡").slice(0, 8),
               timestamp: nowIso,
               kstTime: nowKst,
               read: false
@@ -1251,23 +1493,24 @@ function createServerHandler() {
             messages: createdEntries
           });
         } catch (e) {
-          return sendJSON(res, 500, { success: false, message: e.message });
+          return sendJSON(res, e.statusCode || 500, { success: false, message: e.message });
         }
       }
 
-      // 12. 미확인 실시간 메시지 확인 (GET /api/messages/check)
+      // 12. 미확인 실시간 메시지 확인 (GET /api/messages/check — Authorization header only)
       if (pathname === "/api/messages/check" && req.method === "GET") {
-        const authHeader = req.headers["authorization"] || "";
-        const token = authHeader.replace(/^Bearer\s+/, "") || parsedUrl.searchParams.get("token");
         const db = loadDB();
-        const username = db.tokens[token];
-
-        if (!username || !db.users[username]) {
+        const auth = authenticate(req, db);
+        if (!auth) {
+          const hasAuthHeader = Boolean(req.headers["authorization"]);
+          if (hasAuthHeader) {
+            return sendJSON(res, 401, { success: false, unreadCount: 0, messages: [], error: "인증이 만료되었습니다." });
+          }
           return sendJSON(res, 200, { success: true, unreadCount: 0, messages: [] });
         }
 
         const messages = loadMessages();
-        const unread = messages.filter(m => m.toUsername === username && !m.read);
+        const unread = messages.filter(m => m.toUsername === auth.username && !m.read);
         return sendJSON(res, 200, {
           success: true,
           unreadCount: unread.length,
@@ -1275,20 +1518,17 @@ function createServerHandler() {
         });
       }
 
-      // 13. 전체 메시지 보관함 (GET /api/messages/inbox)
+      // 13. 전체 메시지 보관함 (GET /api/messages/inbox — Authorization header only)
       if (pathname === "/api/messages/inbox" && req.method === "GET") {
-        const authHeader = req.headers["authorization"] || "";
-        const token = authHeader.replace(/^Bearer\s+/, "") || parsedUrl.searchParams.get("token");
         const db = loadDB();
-        const username = db.tokens[token];
-
-        if (!username || !db.users[username]) {
+        const auth = authenticate(req, db);
+        if (!auth) {
           return sendJSON(res, 401, { success: false, message: "로그인이 필요합니다." });
         }
 
         const messages = loadMessages();
         const myMessages = messages
-          .filter(m => m.toUsername === username || m.fromUsername === username)
+          .filter(m => m.toUsername === auth.username || m.fromUsername === auth.username)
           .slice(-50)
           .reverse();
 
@@ -1303,7 +1543,7 @@ function createServerHandler() {
         try {
           const authHeader = req.headers["authorization"] || "";
           const body = await parseJSONBody(req);
-          const token = body.token || authHeader.replace(/^Bearer\s+/, "");
+          const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : (body.token || "");
           const db = loadDB();
           const username = db.tokens[token];
 
@@ -1331,18 +1571,32 @@ function createServerHandler() {
 
           return sendJSON(res, 200, { success: true, updatedCount });
         } catch (e) {
-          return sendJSON(res, 500, { success: false, message: e.message });
+          return sendJSON(res, e.statusCode || 500, { success: false, message: e.message });
         }
       }
 
       // 15. Web Push: VAPID 공개키 조회 (GET /api/push/vapid-public-key)
       if (pathname === "/api/push/vapid-public-key" && req.method === "GET") {
-        let vapidData = { publicKey: "BC0M1ciK9mgw1UcY2mlx4r62-S_FjJHxTtHNgsanri9BgJxBIcr5T8HfKU7DbWwcbF6x68nL_AecAhWeqMvaPQQ" };
+        let vapidData = null;
         try {
           if (fs.existsSync(VAPID_FILE)) {
             vapidData = JSON.parse(fs.readFileSync(VAPID_FILE, "utf8"));
           }
         } catch (e) {}
+        if (!vapidData || !vapidData.publicKey) {
+          // Auto-generate P-256 ECDSA VAPID keypair and persist safely
+          try {
+            const ecdh = crypto.createECDH("prime256v1");
+            ecdh.generateKeys();
+            vapidData = {
+              publicKey: ecdh.getPublicKey().toString("base64url"),
+              privateKey: ecdh.getPrivateKey().toString("base64url")
+            };
+            atomicWriteJSON(VAPID_FILE, vapidData);
+          } catch (e) {
+            return sendJSON(res, 500, { success: false, error: "VAPID 키 생성에 실패했습니다." });
+          }
+        }
         return sendJSON(res, 200, { success: true, publicKey: vapidData.publicKey });
       }
 
@@ -1351,7 +1605,7 @@ function createServerHandler() {
         try {
           const authHeader = req.headers["authorization"] || "";
           const body = await parseJSONBody(req);
-          const token = body.token || authHeader.replace(/^Bearer\s+/, "");
+          const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : (body.token || "");
           const db = loadDB();
           const username = db.tokens[token];
 
@@ -1376,13 +1630,25 @@ function createServerHandler() {
 
           return sendJSON(res, 200, { success: true, message: "푸시 알림 구독이 등록되었습니다." });
         } catch (e) {
-          return sendJSON(res, 500, { success: false, message: e.message });
+          return sendJSON(res, e.statusCode || 500, { success: false, message: e.message });
         }
       }
 
-      // 17. Web Push: 테스트 발송 (POST /api/push/test)
+      // 17. Web Push: 테스트 발송 (POST /api/push/test — Auth required)
       if (pathname === "/api/push/test" && req.method === "POST") {
-        return sendJSON(res, 200, { success: true, message: "테스트 푸시 알림이 발송되었습니다." });
+        const db = loadDB();
+        const auth = authenticate(req, db);
+        if (!auth) {
+          return sendJSON(res, 401, { success: false, message: "로그인이 필요합니다." });
+        }
+        const subs = getPushSubscriptions().filter(s => s.username === auth.username);
+        return sendJSON(res, 200, {
+          success: true,
+          subscribedDevices: subs.length,
+          message: subs.length > 0
+            ? `등록된 기기(${subs.length}대)로 테스트 알림 준비가 완료되었습니다.`
+            : "등록된 푸시 구독 기기가 없습니다. 브라우저 알림을 먼저 켜주세요."
+        });
       }
 
       return sendJSON(res, 404, { error: "API 엔드포인트를 찾을 수 없습니다." });
@@ -1392,13 +1658,14 @@ function createServerHandler() {
     // Root PWA & Mobile Binary Serving
     // ------------------------------------------
     if (pathname === "/manifest.json" || pathname === "/manifest.webmanifest") {
-      const manifestPath = fs.existsSync(path.join(PUBLIC_DIR, "manifest.json")) 
+      const manifestPath = fs.existsSync(path.join(PUBLIC_DIR, "manifest.json"))
         ? path.join(PUBLIC_DIR, "manifest.json")
         : path.join(__dirname, "manifest.json");
       if (fs.existsSync(manifestPath)) {
         res.writeHead(200, {
+          ...SECURITY_HEADERS,
           "Content-Type": "application/manifest+json; charset=utf-8",
-          "Cache-Control": "no-cache, must-revalidate"
+          "Cache-Control": "no-cache, no-store, must-revalidate"
         });
         fs.createReadStream(manifestPath).pipe(res);
         return;
@@ -1406,11 +1673,12 @@ function createServerHandler() {
     }
 
     if (pathname === "/sw.js") {
-      const swPath = fs.existsSync(path.join(PUBLIC_DIR, "sw.js")) 
+      const swPath = fs.existsSync(path.join(PUBLIC_DIR, "sw.js"))
         ? path.join(PUBLIC_DIR, "sw.js")
         : path.join(__dirname, "sw.js");
       if (fs.existsSync(swPath)) {
         res.writeHead(200, {
+          ...SECURITY_HEADERS,
           "Content-Type": "application/javascript; charset=utf-8",
           "Cache-Control": "no-cache, no-store, must-revalidate",
           "Service-Worker-Allowed": "/"
@@ -1420,14 +1688,40 @@ function createServerHandler() {
       }
     }
 
-    // Direct Binary Releases Serving (/releases/HaruElec-v3.1.0-release.apk, etc.)
+    // Block direct access to sensitive internal paths & dotfiles (403 Forbidden)
+    if (
+      pathname.startsWith("/data/") ||
+      pathname.startsWith("/scripts/") ||
+      pathname.startsWith("/tests/") ||
+      pathname.includes("/.") ||
+      pathname === "/server.js" ||
+      pathname === "/package.json" ||
+      pathname === "/docker-compose.yml"
+    ) {
+      res.writeHead(403, SECURITY_HEADERS);
+      res.end("Forbidden");
+      return;
+    }
+
+    // Direct Binary Releases Serving (/releases/HaruElec-v3.3.0-release.apk, etc.)
     if (pathname.startsWith("/releases/")) {
       const fileName = path.basename(pathname);
-      const binaryPath = path.join(RELEASES_DIR, fileName);
+      const ext = path.extname(fileName).toLowerCase();
+      if (!/^[A-Za-z0-9._-]+$/.test(fileName) || (ext !== ".apk" && ext !== ".ipa")) {
+        res.writeHead(403, SECURITY_HEADERS);
+        res.end("Forbidden");
+        return;
+      }
+      const binaryPath = path.resolve(RELEASES_DIR, fileName);
+      if (!binaryPath.startsWith(RELEASES_DIR + path.sep)) {
+        res.writeHead(403, SECURITY_HEADERS);
+        res.end("Forbidden");
+        return;
+      }
       if (fs.existsSync(binaryPath) && fs.statSync(binaryPath).isFile()) {
-        const ext = path.extname(binaryPath).toLowerCase();
         const contentType = MIME_TYPES[ext] || "application/octet-stream";
         res.writeHead(200, {
+          ...SECURITY_HEADERS,
           "Content-Type": contentType,
           "Content-Disposition": `attachment; filename="${fileName}"`,
           "Content-Length": fs.statSync(binaryPath).size,
@@ -1439,17 +1733,17 @@ function createServerHandler() {
     }
 
     // ------------------------------------------
-    // Static File Serving
+    // Static File Serving (Strict PUBLIC_DIR boundary)
     // ------------------------------------------
     let sanitizedPath = pathname === "/" ? "index.html" : pathname;
     if (sanitizedPath.startsWith("/public/")) {
       sanitizedPath = sanitizedPath.substring(7);
     }
-    let filePath = path.join(PUBLIC_DIR, sanitizedPath);
+    const filePath = path.resolve(PUBLIC_DIR, sanitizedPath.replace(/^\/+/, ""));
 
-    // Basic path traversal protection
-    if (!filePath.startsWith(PUBLIC_DIR)) {
-      res.writeHead(403);
+    // Strict path traversal protection with path.sep boundary
+    if (filePath !== PUBLIC_DIR && !filePath.startsWith(PUBLIC_DIR + path.sep)) {
+      res.writeHead(403, SECURITY_HEADERS);
       res.end("Forbidden");
       return;
     }
@@ -1460,13 +1754,14 @@ function createServerHandler() {
         const fallbackPath = path.join(PUBLIC_DIR, "index.html");
         if (fs.existsSync(fallbackPath)) {
           res.writeHead(200, {
+            ...SECURITY_HEADERS,
             "Content-Type": "text/html; charset=utf-8",
             "Cache-Control": "no-cache, must-revalidate"
           });
           fs.createReadStream(fallbackPath).pipe(res);
           return;
         }
-        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.writeHead(404, { ...SECURITY_HEADERS, "Content-Type": "text/plain; charset=utf-8" });
         res.end("404 Not Found");
         return;
       }
@@ -1479,6 +1774,7 @@ function createServerHandler() {
       const isVersionJson = path.basename(filePath) === "version.json";
 
       const headers = {
+        ...SECURITY_HEADERS,
         "Content-Type": contentType,
         "Cache-Control": isVersionJson
           ? "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
@@ -1515,4 +1811,4 @@ if (require.main === module) {
   startServer(PORT);
 }
 
-module.exports = { startServer, createServerHandler };
+module.exports = { startServer, createServerHandler, hashPassword, verifyPassword, escapeHtmlServer };

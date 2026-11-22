@@ -1,5 +1,28 @@
 {
-  "version": "3.2.0",
-  "build": "20261117_0700",
-  "releaseNotes": "v3.2.0 Major Upgrade: Chapter Deep-Dive Study Mode (과목별/단원별 세분화), Mobile Header Zero-Overflow Fix, Precise 2026/2027 Q-Net Schedule & D-Day Engine, Wrong Notes Chapter Selection, 300 Questions Bank Expansion"
+  "version": "3.3.0",
+  "build": "20261123_0620",
+  "name": "하루전기 (HaruElec)",
+  "releaseNotes": "v3.3.0 종합 보안·안정성·PWA 대규모 고도화: 핵심 런타임 버그 6종 수정, 보안 강화(XSS/scrypt/RateLimit), 실측 과목 숙련도, 모바일 제로-컷 모달 및 업데이트 안내창 적용",
+  "features": [
+    {
+      "icon": "🍀",
+      "title": "통전 클로버·이어하기·난이도 모드 완전 수정",
+      "desc": "아이템 크래시, 세션 덮어쓰기, 난이도 모달 재팝업, 4과목 챕터 충돌 및 전체 수험생 메시지 404를 모두 해결했습니다."
+    },
+    {
+      "icon": "🛡️",
+      "title": "보안 하드닝 & 로그인 클라우드 데이터 보호",
+      "desc": "scrypt 비밀번호 암호화, Stored XSS 차단, 로그인 시 서버 학습기록 안전 병합, 401 세션 관리를 적용했습니다."
+    },
+    {
+      "icon": "📊",
+      "title": "실측 과목별 숙련도 & 오프라인 PWA 캐싱",
+      "desc": "가상 수치 대신 6개 과목 실제 정답률을 집계하며, 오프라인 앱 쉘 캐싱과 삼성/웨일/iOS 설치 가이드를 완비했습니다."
+    },
+    {
+      "icon": "📱",
+      "title": "모바일 제로-컷 모달 & 한글(IME) 검색 개선",
+      "desc": "90dvh·안전영역·스티키 버튼으로 작은 화면 하단 잘림을 차단하고 한글 Enter 검색 중복 오류를 해결했습니다."
+    }
+  ]
 }

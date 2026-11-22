@@ -932,24 +932,132 @@ body {
   border-radius: var(--radius-full);
 }
 
-/* Modal */
+/* Modal (Rule 17: Mobile Zero-Cut 90dvh, Safe-Area, Independent Scroll & Sticky Actions) */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(6px);
   z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   animation: fadeIn 0.2s ease;
 }
 
 .modal-card {
   width: 100%;
-  max-width: 400px;
-  padding: 24px;
+  max-width: 420px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 22px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 16px));
+}
+
+.modal-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.modal-actions-sticky {
+  position: sticky;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.96);
+  padding-top: 12px;
+  padding-bottom: 4px;
+  margin-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 10;
+}
+
+/* Fixed Top PWA Install Banner (Rule 15.3) */
+.pwa-install-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(250, 204, 21, 0.12));
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  flex-wrap: wrap;
+}
+
+.pwa-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.pwa-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* What's New Release Modal Feature Cards (Rule 16.4) */
+.whatsnew-version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(56, 189, 248, 0.2));
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  color: var(--accent-elec);
+  font-weight: 800;
+  font-size: 0.82rem;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.whatsnew-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.whatsnew-feature-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.whatsnew-feature-icon {
+  font-size: 1.4rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.whatsnew-feature-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  margin-bottom: 3px;
+}
+
+.whatsnew-feature-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 .modal-header {

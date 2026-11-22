@@ -1,11 +1,36 @@
 /**
- * 하루전기 (Haru Elec) - Frontend Application Core (v2.1.0)
+ * 하루전기 (Haru Elec) - Frontend Application Core (v3.3.0)
  */
 
 (function () {
   "use strict";
 
-  const CURRENT_APP_VERSION = "3.2.0";
+  const CURRENT_APP_VERSION = "3.3.0";
+
+  // Global HTML Escape Helper (XSS Defense across all dynamic innerHTML sinks)
+  function escapeHtml(str) {
+    return String(str == null ? "" : str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // Rule 15.3: Capture beforeinstallprompt immediately at script load before DOMContentLoaded
+  let earlyDeferredPwaPrompt = null;
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      earlyDeferredPwaPrompt = e;
+      if (typeof state !== "undefined") {
+        state.deferredPwaPrompt = e;
+      }
+      if (typeof showPwaInstallBanner === "function") {
+        showPwaInstallBanner();
+      }
+    });
+  }
 
   // KST Date Helper
   function getKSTDateString(dateObj = new Date()) {
@@ -139,10 +164,21 @@
     selectedSubSubject: "", // e.g. "회로이론", "제어공학"
     selectedChapterId: 0,
     selectedWrongSubjectId: 0,
+    selectedWrongSubSubject: "",
     selectedWrongChapterId: 0,
     chapterRegistry: null,
+    subjectStats: {}, // { [subject_id]: { correct: number, total: number } }
     inboxMessages: []
   };
+
+  function recordSubjectAnswer(question, isCorrect) {
+    if (!question || !question.subject_id) return;
+    if (!state.subjectStats || typeof state.subjectStats !== "object") state.subjectStats = {};
+    const key = String(question.subject_id);
+    if (!state.subjectStats[key]) state.subjectStats[key] = { correct: 0, total: 0 };
+    state.subjectStats[key].total += 1;
+    if (isCorrect) state.subjectStats[key].correct += 1;
+  }
 
   function recordQuestionSolved(qId) {
     if (!qId) return;
@@ -223,7 +259,6 @@
     get modeTabs() { return $$(".mode-tab"); },
     get wrongBadge() { return $("wrongBadge"); },
     get subjectFilterBar() { return $("subjectFilterBar"); },
-    get filterBtns() { return $$(".filter-btn"); },
     get practiceSubjectButtons() { return $$("#practiceSubjectButtons .filter-btn"); },
     get subSubjectRow() { return $("subSubjectRow"); },
     get subSubjectChips() { return $$("#subSubjectChips .sub-chip"); },
@@ -384,7 +419,20 @@
     get incomingSenderName() { return $("incomingSenderName"); },
     get incomingContentBox() { return $("incomingContentBox"); },
     get btnReplyIncoming() { return $("btnReplyIncoming"); },
-    get btnCloseIncoming() { return $("btnCloseIncoming"); }
+    get btnCloseIncoming() { return $("btnCloseIncoming"); },
+
+    // v3.3.0 PWA Install Banner, Recipient Select & What's New Modal
+    get pwaInstallBanner() { return $("pwaInstallBanner"); },
+    get btnBannerInstallNow() { return $("btnBannerInstallNow"); },
+    get btnBannerDismiss() { return $("btnBannerDismiss"); },
+    get msgRecipientSelect() { return $("msgRecipientSelect"); },
+    get modalWhatsNew() { return $("modalWhatsNew"); },
+    get whatsNewVersionBadge() { return $("whatsNewVersionBadge"); },
+    get whatsNewBuildDate() { return $("whatsNewBuildDate"); },
+    get whatsNewSummary() { return $("whatsNewSummary"); },
+    get whatsNewFeatureList() { return $("whatsNewFeatureList"); },
+    get btnCloseWhatsNew() { return $("btnCloseWhatsNew"); },
+    get btnConfirmWhatsNew() { return $("btnConfirmWhatsNew"); }
   };
 
   // Toast Helper
@@ -433,6 +481,11 @@
         if (typeof data.totalPoints === "number") state.totalPoints = data.totalPoints;
         if (typeof data.todayScore === "number") state.todayScore = data.todayScore;
         if (typeof data.maxRoundToday === "number") state.maxRoundToday = data.maxRoundToday;
+        if (typeof data.maxRoundWritten === "number") state.maxRoundWritten = data.maxRoundWritten;
+        if (typeof data.maxRoundPractical === "number") state.maxRoundPractical = data.maxRoundPractical;
+        if (data.examTrack === "written" || data.examTrack === "practical") state.examTrack = data.examTrack;
+        if (typeof data.selectedLevel === "number") state.selectedLevel = data.selectedLevel;
+        if (data.subjectStats && typeof data.subjectStats === "object") state.subjectStats = data.subjectStats;
         if (data.solvedQuestionIds) state.solvedQuestionIds = new Set(data.solvedQuestionIds);
         if (typeof data.shieldCount === "number") state.shieldCount = Math.min(2, Math.max(0, data.shieldCount));
         if (typeof data.consecutivePerfectRounds === "number") state.consecutivePerfectRounds = data.consecutivePerfectRounds;
@@ -456,10 +509,15 @@
         totalPoints: state.totalPoints || 0,
         todayScore: state.todayScore || 0,
         maxRoundToday: state.maxRoundToday || 1,
+        maxRoundWritten: state.maxRoundWritten || state.maxRoundToday || 1,
+        maxRoundPractical: state.maxRoundPractical || 1,
+        examTrack: state.examTrack || "written",
+        selectedLevel: state.selectedLevel || 1,
+        subjectStats: state.subjectStats || {},
         solvedQuestionIds: Array.from(state.solvedQuestionIds),
         shieldCount: Math.min(2, Math.max(0, state.shieldCount || 0)),
         consecutivePerfectRounds: state.consecutivePerfectRounds || 0,
-        items: state.items || { eraser5050: 2, heart: 2, booster2x: 2 },
+        items: state.items || { eraser5050: 2, heart: 2, booster2x: 2, hint: 2, clover: 1, timemachine: 1, magnet: 1 },
         user: state.user
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -473,16 +531,22 @@
     if (!customState || !customState.questions || customState.questions.length === 0) {
       return false;
     }
+    const subId = customState.selectedSubjectId || customState.subjectId || 0;
     const session = {
       date: customState.todayDateStr || getKSTDateString(),
       mode: customState.mode || "daily",
-      subjectId: customState.subjectId || 0,
+      subjectId: subId,
+      selectedSubjectId: subId,
+      selectedSubSubject: customState.selectedSubSubject || "",
+      selectedChapterId: customState.selectedChapterId || 0,
+      examTrack: customState.examTrack || "written",
+      selectedLevel: customState.selectedLevel || 1,
       currentRound: customState.currentRound || 1,
       currentIndex: customState.currentIndex || 0,
       questions: customState.questions,
       userAnswers: customState.userAnswers || {},
       shieldCount: customState.shieldCount || 0,
-      items: customState.items || { eraser5050: 2, heart: 2, booster2x: 2 },
+      items: customState.items || { eraser5050: 2, heart: 2, booster2x: 2, hint: 2, clover: 1, timemachine: 1, magnet: 1 },
       pointMultiplier: customState.pointMultiplier || 1,
       activeItemHeart: !!customState.activeItemHeart,
       savedAt: Date.now()
@@ -527,8 +591,18 @@
         return false;
       }
 
+      const restoredSubId = session.selectedSubjectId || session.subjectId || 0;
       targetState.mode = session.mode || "daily";
-      targetState.subjectId = session.subjectId || 0;
+      targetState.subjectId = restoredSubId;
+      targetState.selectedSubjectId = restoredSubId;
+      targetState.selectedSubSubject = session.selectedSubSubject || "";
+      targetState.selectedChapterId = session.selectedChapterId || 0;
+      if (session.examTrack === "written" || session.examTrack === "practical") {
+        targetState.examTrack = session.examTrack;
+      }
+      if (typeof session.selectedLevel === "number") {
+        targetState.selectedLevel = session.selectedLevel;
+      }
       targetState.currentRound = session.currentRound || 1;
       targetState.currentIndex = session.currentIndex || 0;
       targetState.questions = session.questions;
@@ -797,7 +871,7 @@
     lastVersionCheckTime = now;
 
     try {
-      const res = await fetch("/api/version", { cache: "no-store" });
+      const res = await fetch("/api/version?_t=" + now, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       const serverVersion = data.version;
@@ -806,16 +880,20 @@
         console.log(`[Version] Newer version detected: ${CURRENT_APP_VERSION} -> ${serverVersion}`);
         saveActiveQuizSession();
 
+        // Rule 16.3: Loop guard per target version (60s window)
         try {
           if (typeof sessionStorage !== "undefined") {
-            const lastReload = parseInt(sessionStorage.getItem("haruelec_last_version_reload") || "0", 10);
+            const guardKey = `auto_reload_to_${serverVersion}`;
+            const lastReload = parseInt(sessionStorage.getItem(guardKey) || "0", 10);
             if (now - lastReload < 60000) {
               console.warn("[Version] Reload guard triggered, suppressing reload loop.");
               return;
             }
-            sessionStorage.setItem("haruelec_last_version_reload", String(now));
+            sessionStorage.setItem(guardKey, String(now));
           }
         } catch (e) {}
+
+        showToast(`🚀 새 버전(v${serverVersion})으로 업데이트되었습니다. 최신 화면으로 새로고침합니다...`, 2000);
 
         if (typeof window !== "undefined" && window.caches) {
           try {
@@ -825,12 +903,66 @@
         }
 
         if (typeof window !== "undefined" && window.location) {
-          window.location.reload(true);
+          const url = new URL(window.location.href);
+          url.searchParams.set("_v", serverVersion);
+          url.searchParams.set("_t", String(Date.now()));
+          setTimeout(() => window.location.replace(url.toString()), 600);
         }
       }
     } catch (e) {
       console.warn("[Version] Version check failed", e);
     }
+  }
+
+  // Rule 16.4: Auto-show What's New Modal once after updating to a new version
+  async function checkWhatsNewPopup() {
+    if (typeof localStorage === "undefined" || !DOM.modalWhatsNew) return;
+    try {
+      const dismissed = localStorage.getItem("dismissed_update_version");
+      if (dismissed === CURRENT_APP_VERSION) return;
+
+      const res = await fetch("/api/version?_t=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      if (DOM.whatsNewVersionBadge) {
+        DOM.whatsNewVersionBadge.textContent = `🚀 v${data.version || CURRENT_APP_VERSION} 업데이트`;
+      }
+      if (DOM.whatsNewBuildDate) {
+        DOM.whatsNewBuildDate.textContent = data.build ? `빌드: ${data.build}` : "";
+      }
+      if (DOM.whatsNewSummary) {
+        DOM.whatsNewSummary.textContent = data.releaseNotes || "새로운 개선 사항이 적용되었습니다.";
+      }
+      if (DOM.whatsNewFeatureList) {
+        const features = Array.isArray(data.features) ? data.features : [];
+        if (features.length > 0) {
+          DOM.whatsNewFeatureList.innerHTML = features.map(f => `
+            <div class="whatsnew-feature-card">
+              <div class="whatsnew-feature-icon">${escapeHtml(f.icon || "⚡")}</div>
+              <div>
+                <div class="whatsnew-feature-title">${escapeHtml(f.title || "")}</div>
+                <div class="whatsnew-feature-desc">${escapeHtml(f.desc || "")}</div>
+              </div>
+            </div>
+          `).join("");
+        } else {
+          DOM.whatsNewFeatureList.replaceChildren();
+        }
+      }
+      DOM.modalWhatsNew.classList.remove("hidden");
+    } catch (e) {
+      console.warn("[WhatsNew] Popup check skipped:", e);
+    }
+  }
+
+  function dismissWhatsNewPopup() {
+    if (DOM.modalWhatsNew) DOM.modalWhatsNew.classList.add("hidden");
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("dismissed_update_version", CURRENT_APP_VERSION);
+      }
+    } catch (e) {}
   }
 
   // UI Updates for Items and Shields
@@ -965,11 +1097,22 @@
       showToast("남은 통전 클로버 아이템이 없습니다!");
       return;
     }
+    recordQuestionSolved(q.id);
+    recordSubjectAnswer(q, true);
+    state.wrongQuestions.delete(q.id);
+    state.activeItem5050Indices = [];
+    sound.correct();
     updateItemUI();
     saveLocalState();
     saveActiveQuizSession();
+    updateDashboardStats();
+    renderQuestion();
     showToast("🍀 통전 클로버 발동! 이번 문제가 100% 정답 처리되었습니다.");
-    selectOption(res.answer);
+    setTimeout(() => {
+      if (DOM.explanationBox) {
+        DOM.explanationBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }, 100);
   }
 
   function useItemTimemachine() {
@@ -1082,6 +1225,84 @@
     showToast("🛡️ 방패를 보존하고 오답 복습 모드로 전환합니다.");
   }
 
+  // Safe Cloud-to-Local State Merger (Prevents wiping cloud history/wrongQuestions on new device login)
+  function mergeServerUserIntoState(serverUser, targetState = state) {
+    if (!serverUser || typeof serverUser !== "object") return;
+
+    // 1. Merge history (dedupe by timestamp or date+mode+round+score)
+    const existingHistory = Array.isArray(targetState.history) ? targetState.history : [];
+    const serverHistory = Array.isArray(serverUser.history) ? serverUser.history : [];
+    const historyMap = new Map();
+    [...serverHistory, ...existingHistory].forEach(h => {
+      if (!h) return;
+      const key = h.timestamp || `${h.date}_${h.mode || "daily"}_${h.round || 1}_${h.score}_${h.total}`;
+      if (!historyMap.has(key)) historyMap.set(key, h);
+    });
+    targetState.history = Array.from(historyMap.values());
+
+    // 2. Union sets for wrongQuestions, bookmarks, solvedQuestionIds
+    const wrongSet = new Set(targetState.wrongQuestions instanceof Set ? targetState.wrongQuestions : (targetState.wrongQuestions || []));
+    (serverUser.wrongQuestions || []).forEach(id => wrongSet.add(id));
+    targetState.wrongQuestions = wrongSet;
+
+    const bookmarkSet = new Set(targetState.bookmarks instanceof Set ? targetState.bookmarks : (targetState.bookmarks || []));
+    (serverUser.bookmarks || []).forEach(id => bookmarkSet.add(id));
+    targetState.bookmarks = bookmarkSet;
+
+    const solvedSet = new Set(targetState.solvedQuestionIds instanceof Set ? targetState.solvedQuestionIds : (targetState.solvedQuestionIds || []));
+    (serverUser.solvedQuestionIds || []).forEach(id => solvedSet.add(id));
+    targetState.solvedQuestionIds = solvedSet;
+
+    // 3. Monotonic numeric fields
+    if (typeof serverUser.streak === "number") {
+      targetState.streak = Math.max(targetState.streak || 0, serverUser.streak);
+    }
+    if (typeof serverUser.totalPoints === "number") {
+      targetState.totalPoints = Math.max(targetState.totalPoints || 0, serverUser.totalPoints);
+    }
+    if (typeof serverUser.todayScore === "number") {
+      targetState.todayScore = Math.max(targetState.todayScore || 0, serverUser.todayScore);
+    }
+    if (typeof serverUser.maxRoundToday === "number") {
+      targetState.maxRoundToday = Math.max(targetState.maxRoundToday || 1, serverUser.maxRoundToday);
+    }
+    if (typeof serverUser.maxRoundWritten === "number") {
+      targetState.maxRoundWritten = Math.max(targetState.maxRoundWritten || 1, serverUser.maxRoundWritten);
+    }
+    if (typeof serverUser.maxRoundPractical === "number") {
+      targetState.maxRoundPractical = Math.max(targetState.maxRoundPractical || 1, serverUser.maxRoundPractical);
+    }
+    if (serverUser.lastAttendance && (!targetState.lastAttendance || serverUser.lastAttendance > targetState.lastAttendance)) {
+      targetState.lastAttendance = serverUser.lastAttendance;
+    }
+    if (typeof serverUser.shieldCount === "number") {
+      targetState.shieldCount = Math.min(2, Math.max(targetState.shieldCount || 0, serverUser.shieldCount));
+    }
+    if (serverUser.items && typeof serverUser.items === "object") {
+      targetState.items = { ...targetState.items, ...serverUser.items };
+    }
+    if (serverUser.subjectStats && typeof serverUser.subjectStats === "object") {
+      targetState.subjectStats = targetState.subjectStats || {};
+      for (const [subId, st] of Object.entries(serverUser.subjectStats)) {
+        if (!st) continue;
+        const prev = targetState.subjectStats[subId] || { correct: 0, total: 0 };
+        targetState.subjectStats[subId] = {
+          correct: Math.max(prev.correct || 0, st.correct || 0),
+          total: Math.max(prev.total || 0, st.total || 0)
+        };
+      }
+    }
+  }
+
+  // Rule 9: Clear stored auth token ONLY on explicit 401 Unauthorized (never on offline/5xx)
+  function handleUnauthorizedSession() {
+    if (!state.user) return;
+    state.user = null;
+    saveLocalState();
+    updateDashboardStats();
+    showToast("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+  }
+
   // Cloud Sync API
   async function syncWithServer(action = "DATA_SYNC", details = {}) {
     if (!state.user || !state.user.token) return;
@@ -1101,20 +1322,30 @@
           totalPoints: state.totalPoints || 0,
           todayScore: state.todayScore || 0,
           maxRoundToday: state.maxRoundToday || 1,
+          maxRoundWritten: state.maxRoundWritten || state.maxRoundToday || 1,
+          maxRoundPractical: state.maxRoundPractical || 1,
           solvedQuestionIds: Array.from(state.solvedQuestionIds),
+          subjectStats: state.subjectStats || {},
           shieldCount: state.shieldCount || 0,
-          items: state.items || { eraser5050: 2, heart: 2, booster2x: 2 },
+          items: state.items || { eraser5050: 2, heart: 2, booster2x: 2, hint: 2, clover: 1, timemachine: 1, magnet: 1 },
           action,
           details
         })
       });
+      if (res.status === 401) {
+        handleUnauthorizedSession();
+        return;
+      }
       if (res.ok) {
         const body = await res.json();
         if (body.success && body.user) {
           if (typeof body.user.totalPoints === "number") state.totalPoints = body.user.totalPoints;
           if (typeof body.user.maxRoundToday === "number") state.maxRoundToday = body.user.maxRoundToday;
+          if (typeof body.user.maxRoundWritten === "number") state.maxRoundWritten = body.user.maxRoundWritten;
+          if (typeof body.user.maxRoundPractical === "number") state.maxRoundPractical = body.user.maxRoundPractical;
           if (typeof body.user.shieldCount === "number") state.shieldCount = Math.min(2, body.user.shieldCount);
           if (Array.isArray(body.user.solvedQuestionIds)) state.solvedQuestionIds = new Set(body.user.solvedQuestionIds);
+          if (body.user.subjectStats && typeof body.user.subjectStats === "object") state.subjectStats = body.user.subjectStats;
           if (body.user.items) state.items = { ...state.items, ...body.user.items };
           saveLocalState();
           updateShieldBadge();
@@ -1159,16 +1390,17 @@
 
     if (DOM.userMenu) {
       if (state.user) {
+        const displayName = escapeHtml(state.user.nickname || state.user.username);
         DOM.userMenu.innerHTML = `
           <div class="user-profile">
-            <span class="user-name">⚡ ${state.user.nickname || state.user.username}님</span>
-            <button class="btn btn-outline-sm" id="logoutBtn">로그아웃</button>
+            <span class="user-name">⚡ ${displayName}님</span>
+            <button class="btn btn-outline-sm" id="logoutBtn" type="button">로그아웃</button>
           </div>
         `;
         const logoutBtn = document.getElementById("logoutBtn");
         if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
       } else {
-        DOM.userMenu.innerHTML = `<button class="btn btn-outline-sm" id="authBtn">로그인</button>`;
+        DOM.userMenu.innerHTML = `<button class="btn btn-outline-sm" id="authBtn" type="button">로그인</button>`;
         const authBtn = document.getElementById("authBtn");
         if (authBtn) authBtn.addEventListener("click", () => openAuthModal("login"));
       }
@@ -1197,7 +1429,7 @@
     } else if (state.mode === "level") {
       loadLevelQuestions(state.selectedLevel || 1, 1);
     } else if (state.mode === "practice") {
-      loadPracticeQuestions(state.subjectId || 0);
+      loadPracticeQuestions(state.selectedSubjectId || 0);
     } else if (state.mode === "leaderboard") {
       loadLeaderboard(track);
     }
@@ -1385,37 +1617,51 @@
     if (state.selectedSubjectId === 4 && state.selectedSubSubject) {
       const targetSub = subInfo.sub_subjects[state.selectedSubSubject];
       if (targetSub && targetSub.chapters) {
-        chaptersToRender = Object.values(targetSub.chapters);
+        chaptersToRender = Object.values(targetSub.chapters).map(c => ({
+          ...c,
+          sub_subject: state.selectedSubSubject
+        }));
       }
     } else {
-      // Aggregate all chapters in this subject
+      // Aggregate all chapters in this subject while preserving sub_subject distinction
       const seen = new Set();
-      Object.values(subInfo.sub_subjects).forEach(s => {
+      Object.entries(subInfo.sub_subjects).forEach(([subKey, s]) => {
         Object.values(s.chapters).forEach(c => {
-          const key = `${c.chapter_id}_${c.chapter_name}`;
+          const key = `${subKey}_${c.chapter_id}_${c.chapter_name}`;
           if (!seen.has(key)) {
             seen.add(key);
-            chaptersToRender.push(c);
+            chaptersToRender.push({ ...c, sub_subject: subKey });
           }
         });
       });
     }
 
-    // Sort by chapter_id
-    chaptersToRender.sort((a, b) => a.chapter_id - b.chapter_id);
+    // Sort by sub_subject then chapter_id
+    chaptersToRender.sort((a, b) => {
+      if (state.selectedSubjectId === 4 && !state.selectedSubSubject && a.sub_subject !== b.sub_subject) {
+        return a.sub_subject === "회로이론" ? -1 : 1;
+      }
+      return a.chapter_id - b.chapter_id;
+    });
 
-    let html = `<button class="chapter-chip ${state.selectedChapterId === 0 ? "active" : ""}" data-chapter="0" type="button">전체 장 (All)</button>`;
+    let html = `<button class="chapter-chip ${state.selectedChapterId === 0 ? "active" : ""}" data-chapter="0" data-sub-subject="" type="button">전체 장 (All)</button>`;
     chaptersToRender.forEach(c => {
-      const isActive = state.selectedChapterId === c.chapter_id;
-      html += `<button class="chapter-chip ${isActive ? "active" : ""}" data-chapter="${c.chapter_id}" type="button">${c.chapter_name} (${c.count}제)</button>`;
+      const prefix = (state.selectedSubjectId === 4 && !state.selectedSubSubject && c.sub_subject) ? `[${c.sub_subject}] ` : "";
+      const isActive = state.selectedChapterId === c.chapter_id && (!state.selectedSubSubject || state.selectedSubSubject === c.sub_subject);
+      html += `<button class="chapter-chip ${isActive ? "active" : ""}" data-chapter="${c.chapter_id}" data-sub-subject="${escapeHtml(c.sub_subject || "")}" type="button">${escapeHtml(prefix + c.chapter_name)} (${c.count}제)</button>`;
     });
 
     DOM.chapterChipsList.innerHTML = html;
 
-    // Attach click events
+    // Attach click events (auto-pins sub_subject for Subject 4 chapters to eliminate chapter_id collision)
     DOM.chapterChipsList.querySelectorAll(".chapter-chip").forEach(chip => {
       chip.addEventListener("click", () => {
-        state.selectedChapterId = parseInt(chip.dataset.chapter, 10) || 0;
+        const chId = parseInt(chip.dataset.chapter, 10) || 0;
+        const chipSub = chip.dataset.subSubject || "";
+        state.selectedChapterId = chId;
+        if (state.selectedSubjectId === 4 && chId > 0 && chipSub) {
+          state.selectedSubSubject = chipSub;
+        }
         updatePracticeFilterUI();
         loadPracticeQuestions();
       });
@@ -1518,8 +1764,22 @@
     }
   }
 
-  // Update Wrong Notes Filter UI (Subject & Chapter Filter for Mistakes)
-  async function updateWrongFilterBar() {
+  // Lightweight Wrong Question Fetcher (POST /api/questions/by-ids — single call, zero 300-question duplication)
+  async function fetchWrongQuestionDetails() {
+    const ids = Array.from(state.wrongQuestions);
+    if (ids.length === 0) return [];
+    const res = await fetch("/api/questions/by-ids", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids })
+    });
+    if (!res.ok) throw new Error("Failed to fetch wrong questions");
+    const data = await res.json();
+    return data.questions || [];
+  }
+
+  // Update Wrong Notes Filter UI (Subject & Chapter Filter with Sub-Subject Distinction)
+  async function updateWrongFilterBar(preloadedWrongList = null) {
     if (!DOM.wrongFilterBar || !DOM.wrongSubjectButtons) return;
 
     if (state.wrongQuestions.size === 0) {
@@ -1529,14 +1789,14 @@
 
     DOM.wrongFilterBar.classList.remove("hidden");
 
-    let allQuestions = [];
-    try {
-      const res = await fetch("/api/questions/practice?subject=0&count=300");
-      const data = await res.json();
-      allQuestions = data.questions || [];
-    } catch (e) {}
-
-    const wrongList = allQuestions.filter(q => state.wrongQuestions.has(q.id));
+    let wrongList = preloadedWrongList;
+    if (!Array.isArray(wrongList)) {
+      try {
+        wrongList = await fetchWrongQuestionDetails();
+      } catch (e) {
+        wrongList = [];
+      }
+    }
 
     // Group wrong questions by subject_id
     const subCounts = { 0: wrongList.length };
@@ -1559,7 +1819,7 @@
       const cnt = subCounts[subId] || 0;
       if (cnt > 0) {
         const isActive = state.selectedWrongSubjectId === parseInt(subId, 10);
-        subHtml += `<button class="filter-btn ${isActive ? "active" : ""}" data-wrong-sub="${subId}" type="button">${name} (${cnt}제)</button>`;
+        subHtml += `<button class="filter-btn ${isActive ? "active" : ""}" data-wrong-sub="${subId}" type="button">${escapeHtml(name)} (${cnt}제)</button>`;
       }
     }
     DOM.wrongSubjectButtons.innerHTML = subHtml;
@@ -1568,13 +1828,13 @@
     DOM.wrongSubjectButtons.querySelectorAll(".filter-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         state.selectedWrongSubjectId = parseInt(btn.dataset.wrongSub, 10) || 0;
+        state.selectedWrongSubSubject = "";
         state.selectedWrongChapterId = 0;
-        updateWrongFilterBar();
         loadWrongQuestions();
       });
     });
 
-    // Render Chapter Chips if specific subject selected
+    // Render Chapter Chips if specific subject selected (composite key prevents Sub 4 collision)
     if (!DOM.wrongChapterRow || !DOM.wrongChapterChipsList) return;
 
     if (state.selectedWrongSubjectId === 0) {
@@ -1584,32 +1844,47 @@
 
     DOM.wrongChapterRow.classList.remove("hidden");
     const subWrong = wrongList.filter(q => q.subject_id === state.selectedWrongSubjectId);
-    const chCounts = {};
-    const chNames = {};
+    const chMap = new Map();
 
     subWrong.forEach(q => {
       const chId = q.chapter_id || 1;
-      chCounts[chId] = (chCounts[chId] || 0) + 1;
-      chNames[chId] = q.chapter_name || `제${chId}장`;
+      const subName = q.sub_subject || q.subject || "";
+      const key = `${subName}::${chId}`;
+      if (!chMap.has(key)) {
+        const prefix = (state.selectedWrongSubjectId === 4 && subName) ? `[${subName}] ` : "";
+        chMap.set(key, {
+          chapter_id: chId,
+          sub_subject: subName,
+          label: `${prefix}${q.chapter_name || `제${chId}장`}`,
+          count: 0
+        });
+      }
+      chMap.get(key).count++;
     });
 
-    let chHtml = `<button class="chapter-chip ${state.selectedWrongChapterId === 0 ? "active" : ""}" data-wrong-chapter="0" type="button">과목 전체 (${subWrong.length}제)</button>`;
-    Object.keys(chCounts).sort((a,b) => a - b).forEach(chId => {
-      const isActive = state.selectedWrongChapterId === parseInt(chId, 10);
-      chHtml += `<button class="chapter-chip ${isActive ? "active" : ""}" data-wrong-chapter="${chId}" type="button">${chNames[chId]} (${chCounts[chId]}제)</button>`;
+    const sortedChapters = Array.from(chMap.values()).sort((a, b) => {
+      if (a.sub_subject !== b.sub_subject) return a.sub_subject.localeCompare(b.sub_subject);
+      return a.chapter_id - b.chapter_id;
+    });
+
+    let chHtml = `<button class="chapter-chip ${state.selectedWrongChapterId === 0 ? "active" : ""}" data-wrong-chapter="0" data-wrong-sub-subject="" type="button">과목 전체 (${subWrong.length}제)</button>`;
+    sortedChapters.forEach(item => {
+      const isActive = state.selectedWrongChapterId === item.chapter_id &&
+        (!state.selectedWrongSubSubject || state.selectedWrongSubSubject === item.sub_subject);
+      chHtml += `<button class="chapter-chip ${isActive ? "active" : ""}" data-wrong-chapter="${item.chapter_id}" data-wrong-sub-subject="${escapeHtml(item.sub_subject)}" type="button">${escapeHtml(item.label)} (${item.count}제)</button>`;
     });
 
     DOM.wrongChapterChipsList.innerHTML = chHtml;
     DOM.wrongChapterChipsList.querySelectorAll(".chapter-chip").forEach(chip => {
       chip.addEventListener("click", () => {
         state.selectedWrongChapterId = parseInt(chip.dataset.wrongChapter, 10) || 0;
-        updateWrongFilterBar();
+        state.selectedWrongSubSubject = chip.dataset.wrongSubSubject || "";
         loadWrongQuestions();
       });
     });
   }
 
-  // Load Wrong Note Questions (Enhanced for Chapter Filtering)
+  // Load Wrong Note Questions (Single lightweight fetch shared with filter bar)
   async function loadWrongQuestions() {
     if (state.wrongQuestions.size === 0) {
       showToast("오답노트에 저장된 문제가 없습니다! 👏");
@@ -1622,14 +1897,15 @@
       if (roundBadge) roundBadge.classList.add("hidden");
       if (DOM.questionText) DOM.questionText.textContent = "오답노트 문제를 준비하는 중입니다...";
 
-      const res = await fetch("/api/questions/practice?subject=0&count=300");
-      const data = await res.json();
-      const all = data.questions || [];
+      const wrongPool = await fetchWrongQuestionDetails();
+      await updateWrongFilterBar(wrongPool);
 
-      let filtered = all.filter(q => state.wrongQuestions.has(q.id));
-
+      let filtered = wrongPool;
       if (state.selectedWrongSubjectId > 0) {
         filtered = filtered.filter(q => q.subject_id === state.selectedWrongSubjectId);
+      }
+      if (state.selectedWrongSubSubject) {
+        filtered = filtered.filter(q => (q.sub_subject || q.subject) === state.selectedWrongSubSubject);
       }
       if (state.selectedWrongChapterId > 0) {
         filtered = filtered.filter(q => q.chapter_id === state.selectedWrongChapterId);
@@ -1675,7 +1951,7 @@
   function renderQuestion() {
     if (!state.questions || state.questions.length === 0) {
       if (DOM.questionText) DOM.questionText.textContent = "표시할 문제가 없습니다.";
-      if (DOM.optionsList) DOM.optionsList.innerHTML = "";
+      if (DOM.optionsList) DOM.optionsList.replaceChildren();
       return;
     }
 
@@ -1716,9 +1992,9 @@
       renderMath(DOM.questionText);
     }
 
-    // Options
+    // Options (Built with textContent to safely render < / > math inequalities and prevent XSS)
     if (DOM.optionsList) {
-      DOM.optionsList.innerHTML = "";
+      DOM.optionsList.replaceChildren();
       const answeredOption = state.userAnswers[q.id];
       const isAnswered = answeredOption !== undefined;
 
@@ -1738,10 +2014,14 @@
           }
         }
 
-        optEl.innerHTML = `
-          <span class="option-num">${optNum}</span>
-          <span class="option-text">${optText}</span>
-        `;
+        const numSpan = document.createElement("span");
+        numSpan.className = "option-num";
+        numSpan.textContent = String(optNum);
+        const textSpan = document.createElement("span");
+        textSpan.className = "option-text";
+        textSpan.textContent = optText;
+        optEl.appendChild(numSpan);
+        optEl.appendChild(textSpan);
 
         if (!isAnswered) {
           optEl.addEventListener("click", () => handleSelectOption(q, optNum, optEl));
@@ -1824,6 +2104,7 @@
 
     state.userAnswers[question.id] = selectedOption;
     recordQuestionSolved(question.id);
+    recordSubjectAnswer(question, isCorrect);
 
     if (isCorrect) {
       sound.correct();
@@ -1851,8 +2132,12 @@
 
   // Handle Quiz Completion
   function finishQuiz() {
+    const total = Array.isArray(state.questions) ? state.questions.length : 0;
+    if (total === 0) {
+      showToast("채점할 문제가 없습니다.");
+      return;
+    }
     sound.finish();
-    const total = state.questions.length;
     let correctCount = 0;
     const subjectCounts = {};
 
@@ -1879,12 +2164,12 @@
 
     // Subject breakdown
     if (DOM.subjectResultsGrid) {
-      DOM.subjectResultsGrid.innerHTML = "";
+      DOM.subjectResultsGrid.replaceChildren();
       for (const [subName, stats] of Object.entries(subjectCounts)) {
         const item = document.createElement("div");
         item.className = "sub-res-item";
         item.innerHTML = `
-          <span>${subName}</span>
+          <span>${escapeHtml(subName)}</span>
           <strong>${stats.correct} / ${stats.total} 정답</strong>
         `;
         DOM.subjectResultsGrid.appendChild(item);
@@ -2004,130 +2289,140 @@
     if (DOM.resultSection) DOM.resultSection.classList.remove("hidden");
   }
 
-  // Switch App Mode
-  function switchMode(newMode) {
+  // Switch App Mode (supports { skipLoad, skipModal } for clean Resume / Level selection)
+  function switchMode(newMode, options = {}) {
+    const { skipLoad = false, skipModal = false } = options || {};
     state.mode = newMode;
     DOM.modeTabs.forEach(tab => {
       tab.classList.toggle("active", tab.dataset.mode === newMode);
     });
 
-    DOM.resultSection.classList.add("hidden");
+    if (DOM.resultSection) DOM.resultSection.classList.add("hidden");
 
     const leaderboardSection = document.getElementById("leaderboardSection");
     if (leaderboardSection) leaderboardSection.classList.add("hidden");
 
     if (newMode === "leaderboard") {
-      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.subjectFilterBar) DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
-      DOM.quizSection.classList.add("hidden");
-      DOM.statsSection.classList.add("hidden");
+      if (DOM.quizSection) DOM.quizSection.classList.add("hidden");
+      if (DOM.statsSection) DOM.statsSection.classList.add("hidden");
       if (leaderboardSection) leaderboardSection.classList.remove("hidden");
-      loadLeaderboard();
+      if (!skipLoad) loadLeaderboard();
       return;
     }
 
     if (newMode === "stats") {
-      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.subjectFilterBar) DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
-      DOM.quizSection.classList.add("hidden");
-      DOM.statsSection.classList.remove("hidden");
+      if (DOM.quizSection) DOM.quizSection.classList.add("hidden");
+      if (DOM.statsSection) DOM.statsSection.classList.remove("hidden");
       renderStatsView();
       loadUserLogs();
       return;
     }
 
-    DOM.statsSection.classList.add("hidden");
-    DOM.quizSection.classList.remove("hidden");
+    if (DOM.statsSection) DOM.statsSection.classList.add("hidden");
+    if (DOM.quizSection) DOM.quizSection.classList.remove("hidden");
 
     if (newMode === "daily") {
-      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.subjectFilterBar) DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
-      loadDailyQuestions(state.currentRound || 1);
+      if (!skipLoad) loadDailyQuestions(state.currentRound || 1);
     } else if (newMode === "practice") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
-      DOM.subjectFilterBar.classList.remove("hidden");
+      if (DOM.subjectFilterBar) DOM.subjectFilterBar.classList.remove("hidden");
       if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
       updatePracticeFilterUI();
-      loadPracticeQuestions();
+      if (!skipLoad) loadPracticeQuestions();
     } else if (newMode === "kec") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
-      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.subjectFilterBar) DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
-      loadKecQuestions();
+      if (!skipLoad) loadKecQuestions();
     } else if (newMode === "search") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
-      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.subjectFilterBar) DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.remove("hidden");
-      if (DOM.searchInput.value.trim()) {
-        performSearch(DOM.searchInput.value.trim());
-      } else {
-        DOM.searchInput.focus();
+      if (!skipLoad) {
+        if (DOM.searchInput && DOM.searchInput.value.trim()) {
+          performSearch(DOM.searchInput.value.trim());
+        } else if (DOM.searchInput) {
+          DOM.searchInput.focus();
+        }
       }
     } else if (newMode === "wrong") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
-      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.subjectFilterBar) DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.remove("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
-      updateWrongFilterBar();
-      loadWrongQuestions();
+      if (!skipLoad) loadWrongQuestions();
     } else if (newMode === "level") {
       const roundBadge = document.getElementById("quizRoundBadge");
       if (roundBadge) roundBadge.classList.add("hidden");
-      DOM.subjectFilterBar.classList.add("hidden");
+      if (DOM.subjectFilterBar) DOM.subjectFilterBar.classList.add("hidden");
       if (DOM.wrongFilterBar) DOM.wrongFilterBar.classList.add("hidden");
       if (DOM.searchBarWrap) DOM.searchBarWrap.classList.add("hidden");
-      if (DOM.modalLevelSelect) DOM.modalLevelSelect.classList.remove("hidden");
-      loadLevelQuestions(state.selectedLevel || 1, 1);
+      if (!skipModal && DOM.modalLevelSelect) {
+        DOM.modalLevelSelect.classList.remove("hidden");
+      }
+      if (!skipLoad && skipModal) {
+        loadLevelQuestions(state.selectedLevel || 1, 1);
+      }
     }
   }
 
-  // Render Stats View
+  // Render Stats View (Rule 6: 100% Real Per-Subject Accuracy — Zero Mock Percentages)
   function renderStatsView() {
     const totalSolved = state.history.reduce((sum, h) => sum + (h.total || 0), 0);
     const totalCorrect = state.history.reduce((sum, h) => sum + Math.round((h.score / 100) * (h.total || 10)), 0);
     const accuracy = totalSolved > 0 ? Math.round((totalCorrect / totalSolved) * 100) : 0;
 
-    DOM.statsTotalSolved.textContent = `${totalSolved}제`;
-    DOM.statsOverallAccuracy.textContent = `${accuracy}%`;
-    DOM.statsStreak.textContent = `${state.streak}일`;
-    DOM.statsWrongCount.textContent = `${state.wrongQuestions.size}개`;
+    if (DOM.statsTotalSolved) DOM.statsTotalSolved.textContent = `${totalSolved}제`;
+    if (DOM.statsOverallAccuracy) DOM.statsOverallAccuracy.textContent = `${accuracy}%`;
+    if (DOM.statsStreak) DOM.statsStreak.textContent = `${state.streak}일`;
+    if (DOM.statsWrongCount) DOM.statsWrongCount.textContent = `${state.wrongQuestions.size}개`;
 
-    // Subjects Mastery estimate
+    // Real 6-subject mastery bars based on actual answered statistics (no mock/synthetic data)
     const subjects = [
-      "1. 전기자기학",
-      "2. 전력공학",
-      "3. 전기기기",
-      "4. 회로이론 및 제어공학",
-      "5. 전기설비기술기준"
+      { id: "1", name: "1. 전기자기학" },
+      { id: "2", name: "2. 전력공학" },
+      { id: "3", name: "3. 전기기기" },
+      { id: "4", name: "4. 회로이론 및 제어공학" },
+      { id: "5", name: "5. 전기설비기술기준 (KEC)" },
+      { id: "6", name: "6. 실기 전기설비설계 및 관리" }
     ];
 
-    DOM.subjectMasteryBars.innerHTML = "";
-    subjects.forEach((sub, i) => {
-      const row = document.createElement("div");
-      row.className = "mastery-row";
-      // Generate realistic mastery rate based on accuracy
-      const pct = Math.max(30, Math.min(100, Math.round(accuracy + (i % 2 === 0 ? 8 : -5))));
-      row.innerHTML = `
-        <div class="mastery-meta">
-          <span>${sub}</span>
-          <strong>${pct}%</strong>
-        </div>
-        <div class="mastery-bar-bg">
-          <div class="mastery-bar-fill" style="width: ${pct}%;"></div>
-        </div>
-      `;
-      DOM.subjectMasteryBars.appendChild(row);
-    });
+    if (DOM.subjectMasteryBars) {
+      DOM.subjectMasteryBars.replaceChildren();
+      subjects.forEach((sub) => {
+        const st = (state.subjectStats && state.subjectStats[sub.id]) || { correct: 0, total: 0 };
+        const pct = st.total > 0 ? Math.round((st.correct / st.total) * 100) : 0;
+        const labelText = st.total > 0 ? `${pct}% (${st.correct}/${st.total})` : "미풀이 (0%)";
+        const row = document.createElement("div");
+        row.className = "mastery-row";
+        row.innerHTML = `
+          <div class="mastery-meta">
+            <span>${escapeHtml(sub.name)}</span>
+            <strong>${escapeHtml(labelText)}</strong>
+          </div>
+          <div class="mastery-bar-bg">
+            <div class="mastery-bar-fill" style="width: ${pct}%;"></div>
+          </div>
+        `;
+        DOM.subjectMasteryBars.appendChild(row);
+      });
+    }
   }
 
   // Auth Modal Logic
@@ -2185,11 +2480,14 @@
         nickname: data.user.nickname,
         token: data.token
       };
+      // Merge server cloud state BEFORE syncing so logging in on a new device never wipes cloud history/wrongNotes
+      mergeServerUserIntoState(data.user, state);
       saveLocalState();
       updateDashboardStats();
       DOM.authModal.classList.add("hidden");
       showToast(`⚡ ${data.user.nickname}님 환영합니다!`);
-      syncWithServer();
+      syncWithServer("LOGIN_SYNC");
+      checkUnreadMessages();
     } catch (err) {
       DOM.authMsg.className = "form-msg error";
       DOM.authMsg.textContent = "서버 접속에 실패했습니다.";
@@ -2244,15 +2542,17 @@
           ? `<span class="user-badge-round">🔥 ${roundNum}R</span>`
           : `<span style="color: var(--text-dim); font-size: 0.8rem;">1R</span>`;
 
+        const safeDisplay = escapeHtml(user.nickname || user.username);
+        const safeUserAttr = escapeHtml(user.username);
         return `
           <tr class="${isMe ? "my-rank-row" : ""}">
             <td style="text-align: center;">
               <span class="rank-num-badge ${medalClass}">${medalText}</span>
             </td>
             <td>
-              <strong style="color: var(--text-main); font-size: 0.95rem;">${user.nickname || user.username}</strong>
+              <strong style="color: var(--text-main); font-size: 0.95rem;">${safeDisplay}</strong>
               ${meTag}
-              ${!isMe ? `<button class="btn-table-cheer" data-user="${user.username}" data-name="${user.nickname || user.username}" title="응원 메시지 보내기" style="margin-left: 6px;">💌</button>` : ""}
+              ${!isMe ? `<button class="btn-table-cheer" data-user="${safeUserAttr}" data-name="${safeDisplay}" title="응원 메시지 보내기" type="button" style="margin-left: 6px;">💌</button>` : ""}
             </td>
             <td style="text-align: center; color: var(--accent-elec); font-weight: 700;">
               ${user.streak || 0}일 🔥
@@ -2314,10 +2614,10 @@
           return `
             <div class="log-item-row">
               <div>
-                <span class="log-badge ${badgeClass}">${actionText}</span>
-                <div class="log-meta">IP: ${l.ip || "-"}</div>
+                <span class="log-badge ${escapeHtml(badgeClass)}">${escapeHtml(actionText)}</span>
+                <div class="log-meta">IP: ${escapeHtml(l.ip || "-")}</div>
               </div>
-              <div class="log-time">${l.kstTime || l.timestamp || ""}</div>
+              <div class="log-time">${escapeHtml(l.kstTime || l.timestamp || "")}</div>
             </div>
           `;
         }).join("");
@@ -2362,14 +2662,15 @@
             : l.action === "DATA_SYNC" ? "동기화"
             : "활동";
 
+          const uaPreview = l.userAgent ? l.userAgent.substring(0, 45) + "..." : "-";
           return `
             <div class="log-item-row" style="padding: 10px 12px;">
               <div>
-                <strong style="color: var(--text-main); font-size: 0.9rem;">${l.username || "비회원"}</strong>
-                <span class="log-badge ${badgeClass}" style="margin-left: 6px;">${actionText}</span>
-                <div class="log-meta">IP: ${l.ip || "-"} · ${l.userAgent ? l.userAgent.substring(0, 45) + "..." : "-"}</div>
+                <strong style="color: var(--text-main); font-size: 0.9rem;">${escapeHtml(l.username || "비회원")}</strong>
+                <span class="log-badge ${escapeHtml(badgeClass)}" style="margin-left: 6px;">${escapeHtml(actionText)}</span>
+                <div class="log-meta">IP: ${escapeHtml(l.ip || "-")} · ${escapeHtml(uaPreview)}</div>
               </div>
-              <div class="log-time" style="font-family: var(--font-mono);">${l.kstTime || l.timestamp || ""}</div>
+              <div class="log-time" style="font-family: var(--font-mono);">${escapeHtml(l.kstTime || l.timestamp || "")}</div>
             </div>
           `;
         }).join("");
@@ -2382,17 +2683,42 @@
   }
 
   // ==========================================================
-  // v3.1.0 PWA & Mobile Installation Engine
+  // v3.1.0 ~ v3.3.0 PWA & Mobile Installation Engine (Rule 15)
   // ==========================================================
+  function isStandalonePwa() {
+    if (typeof window === "undefined") return false;
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+      window.navigator.standalone === true;
+  }
+
+  function showPwaInstallBanner() {
+    if (!DOM.pwaInstallBanner || isStandalonePwa()) return;
+    try {
+      if (typeof sessionStorage !== "undefined" && sessionStorage.getItem("haruelec_pwa_banner_dismissed") === "1") {
+        return;
+      }
+    } catch (e) {}
+    DOM.pwaInstallBanner.classList.remove("hidden");
+  }
+
   function initPwa() {
+    if (earlyDeferredPwaPrompt && !state.deferredPwaPrompt) {
+      state.deferredPwaPrompt = earlyDeferredPwaPrompt;
+    }
+
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
+      const registerSw = () => {
         navigator.serviceWorker.register("/sw.js").then((reg) => {
           console.log("[PWA] Service Worker registered:", reg.scope);
         }).catch((err) => {
           console.warn("[PWA] Service Worker registration failed:", err);
         });
-      });
+      };
+      if (document.readyState === "complete") {
+        registerSw();
+      } else {
+        window.addEventListener("load", registerSw);
+      }
 
       navigator.serviceWorker.addEventListener("message", (event) => {
         if (event.data && event.data.type === "HARUELEC_PUSH_RECEIVED") {
@@ -2404,16 +2730,21 @@
     }
 
     if (typeof window !== "undefined") {
-      window.addEventListener("beforeinstallprompt", (e) => {
-        e.preventDefault();
-        state.deferredPwaPrompt = e;
+      if (state.deferredPwaPrompt) {
         if (DOM.btnPwaInstall) {
           DOM.btnPwaInstall.style.animation = "badgePulse 2s infinite ease-in-out";
         }
-      });
+        showPwaInstallBanner();
+      } else if (!isStandalonePwa()) {
+        // Show install banner for mobile browsers (iOS Safari / Samsung Internet / Chrome)
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+        if (isMobile) showPwaInstallBanner();
+      }
 
       window.addEventListener("appinstalled", () => {
         state.deferredPwaPrompt = null;
+        earlyDeferredPwaPrompt = null;
+        if (DOM.pwaInstallBanner) DOM.pwaInstallBanner.classList.add("hidden");
         showToast("🎉 하루전기 앱이 홈 화면에 성공적으로 설치되었습니다!");
       });
     }
@@ -2454,8 +2785,45 @@
   }
 
   // ==========================================================
-  // v3.1.0 Member-to-Member Direct Messaging & Realtime Push
+  // v3.1.0 ~ v3.3.0 Member-to-Member Direct Messaging & Realtime Push
   // ==========================================================
+  async function loadRecipientOptions(preselectedUsername = "") {
+    if (!DOM.msgRecipientSelect || !state.user || !state.user.token) return;
+    try {
+      const res = await fetch("/api/users/recipients", {
+        headers: { "Authorization": `Bearer ${state.user.token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = Array.isArray(data.recipients) ? data.recipients : [];
+      DOM.msgRecipientSelect.replaceChildren();
+      const allOpt = document.createElement("option");
+      allOpt.value = "전체 수험생";
+      allOpt.textContent = "📢 전체 수험생에게 응원 보내기";
+      DOM.msgRecipientSelect.appendChild(allOpt);
+
+      list.forEach(u => {
+        const opt = document.createElement("option");
+        opt.value = u.username;
+        opt.textContent = `⚡ ${u.nickname || u.username} (${u.username})`;
+        DOM.msgRecipientSelect.appendChild(opt);
+      });
+
+      if (preselectedUsername) {
+        const exists = list.some(u => u.username === preselectedUsername);
+        if (!exists) {
+          const customOpt = document.createElement("option");
+          customOpt.value = preselectedUsername;
+          customOpt.textContent = `⚡ ${state.currentRecipient?.name || preselectedUsername}`;
+          DOM.msgRecipientSelect.appendChild(customOpt);
+        }
+        DOM.msgRecipientSelect.value = preselectedUsername;
+      } else {
+        DOM.msgRecipientSelect.value = "전체 수험생";
+      }
+    } catch (e) {}
+  }
+
   function openSendMessageModal(recipientName = "전체 수험생", recipientUsername = "") {
     if (!state.user || !state.user.token) {
       showToast("응원 메시지를 보내려면 먼저 로그인이 필요합니다.");
@@ -2468,6 +2836,7 @@
       DOM.msgContentInput.value = "";
       if (DOM.msgCharCount) DOM.msgCharCount.textContent = "0 / 200자";
     }
+    loadRecipientOptions(recipientUsername);
     if (DOM.modalSendMessage) DOM.modalSendMessage.classList.remove("hidden");
   }
 
@@ -2481,7 +2850,11 @@
       showToast("메시지 내용을 입력해 주세요.");
       return;
     }
+    const selectedVal = DOM.msgRecipientSelect ? DOM.msgRecipientSelect.value : "";
     const recipient = state.currentRecipient || { username: "" };
+    const targetUsername = selectedVal || recipient.username || recipient.name || "전체 수험생";
+    const targetName = selectedVal === "전체 수험생" ? "전체 수험생" : (recipient.name || targetUsername);
+
     try {
       const res = await fetch("/api/messages/send", {
         method: "POST",
@@ -2490,18 +2863,23 @@
           "Authorization": `Bearer ${state.user.token}`
         },
         body: JSON.stringify({
-          toUsername: recipient.username || recipient.name || "",
-          toName: recipient.name || "",
+          toUsername: targetUsername,
+          toName: targetName,
           content: content,
           emojiTag: "⚡"
         })
       });
+      if (res.status === 401) {
+        handleUnauthorizedSession();
+        return;
+      }
       const data = await res.json();
       if (!res.ok) {
         showToast(data.message || "메시지 발송에 실패했습니다.");
         return;
       }
-      showToast("💌 응원 메시지가 성공적으로 발송되었습니다!");
+      const sentCount = data.count || 1;
+      showToast(sentCount > 1 ? `💌 전체 수험생(${sentCount}명)에게 응원 메시지가 발송되었습니다!` : "💌 응원 메시지가 성공적으로 발송되었습니다!");
       if (DOM.modalSendMessage) DOM.modalSendMessage.classList.add("hidden");
       if (DOM.msgContentInput) DOM.msgContentInput.value = "";
       if (DOM.modalInbox && !DOM.modalInbox.classList.contains("hidden")) {
@@ -2521,6 +2899,10 @@
       const res = await fetch("/api/messages/check", {
         headers: { "Authorization": `Bearer ${state.user.token}` }
       });
+      if (res.status === 401) {
+        handleUnauthorizedSession();
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       const count = data.unreadCount || 0;
@@ -2616,20 +2998,22 @@
 
       DOM.inboxMessageList.innerHTML = filtered.map(m => {
         const isReceived = m.toUsername === state.user.username;
-        const targetLabel = isReceived ? `보낸 수험생: ${m.fromName || m.fromUsername}` : `받는 수험생: ${m.toName || m.toUsername}`;
+        const targetLabel = isReceived ? `보낸 수험생: ${escapeHtml(m.fromName || m.fromUsername)}` : `받는 수험생: ${escapeHtml(m.toName || m.toUsername)}`;
         const isUnread = isReceived && !m.read;
+        const safeSenderUser = escapeHtml(m.fromUsername || "");
+        const safeSenderName = escapeHtml(m.fromName || m.fromUsername || "");
 
         return `
-          <div class="inbox-msg-card ${isUnread ? "unread" : ""}" data-id="${m.id}">
+          <div class="inbox-msg-card ${isUnread ? "unread" : ""}" data-id="${escapeHtml(m.id)}">
             <div class="inbox-msg-header">
               <span class="inbox-msg-sender">
                 ${isReceived ? "📥 " : "📤 "} ${targetLabel}
               </span>
-              <span class="inbox-msg-time">${m.kstTime ? m.kstTime.substring(5, 16) : ""}</span>
+              <span class="inbox-msg-time">${escapeHtml(m.kstTime ? m.kstTime.substring(5, 16) : "")}</span>
             </div>
             <div class="inbox-msg-body">${m.content}</div>
             <div class="inbox-msg-footer">
-              ${isReceived ? `<button class="btn btn-outline-sm btn-reply-msg" data-sender="${m.fromUsername}" data-name="${m.fromName || m.fromUsername}" style="font-size: 0.76rem; padding: 2px 8px;">💌 답장</button>` : ""}
+              ${isReceived ? `<button class="btn btn-outline-sm btn-reply-msg" data-sender="${safeSenderUser}" data-name="${safeSenderName}" type="button" style="font-size: 0.76rem; padding: 2px 8px;">💌 답장</button>` : ""}
             </div>
           </div>
         `;
@@ -2766,13 +3150,18 @@
       refreshAdminLogsBtn.addEventListener("click", () => loadAdminLogs());
     }
 
-    // Next Consecutive Round Button
+    // Next Consecutive Round Button (respects both daily and level modes, single fetch)
     const nextRoundBtn = document.getElementById("nextRoundBtn");
     if (nextRoundBtn) {
       nextRoundBtn.addEventListener("click", () => {
         state.currentRound = (state.currentRound || 1) + 1;
-        switchMode("daily");
-        loadDailyQuestions(state.currentRound);
+        if (state.mode === "level") {
+          switchMode("level", { skipLoad: true, skipModal: true });
+          loadLevelQuestions(state.selectedLevel || 1, state.currentRound);
+        } else {
+          switchMode("daily", { skipLoad: true });
+          loadDailyQuestions(state.currentRound);
+        }
       });
     }
 
@@ -2811,36 +3200,44 @@
     }
 
     // Quiz Navigation
-    DOM.prevBtn.addEventListener("click", () => {
-      if (state.currentIndex > 0) {
-        state.currentIndex--;
-        renderQuestion();
-      }
-    });
+    if (DOM.prevBtn) {
+      DOM.prevBtn.addEventListener("click", () => {
+        if (state.currentIndex > 0) {
+          state.currentIndex--;
+          renderQuestion();
+        }
+      });
+    }
 
-    DOM.nextBtn.addEventListener("click", () => {
-      if (state.currentIndex < state.questions.length - 1) {
-        state.currentIndex++;
-        renderQuestion();
-      }
-    });
+    if (DOM.nextBtn) {
+      DOM.nextBtn.addEventListener("click", () => {
+        if (state.currentIndex < state.questions.length - 1) {
+          state.currentIndex++;
+          renderQuestion();
+        }
+      });
+    }
 
-    DOM.finishBtn.addEventListener("click", finishQuiz);
+    if (DOM.finishBtn) {
+      DOM.finishBtn.addEventListener("click", finishQuiz);
+    }
 
     // Bookmark Toggle
-    DOM.bookmarkBtn.addEventListener("click", () => {
-      const q = state.questions[state.currentIndex];
-      if (!q) return;
-      if (state.bookmarks.has(q.id)) {
-        state.bookmarks.delete(q.id);
-        showToast("북마크를 해제했습니다.");
-      } else {
-        state.bookmarks.add(q.id);
-        showToast("⭐ 중요 문제로 북마크했습니다!");
-      }
-      saveLocalState();
-      renderQuestion();
-    });
+    if (DOM.bookmarkBtn) {
+      DOM.bookmarkBtn.addEventListener("click", () => {
+        const q = state.questions[state.currentIndex];
+        if (!q) return;
+        if (state.bookmarks.has(q.id)) {
+          state.bookmarks.delete(q.id);
+          showToast("북마크를 해제했습니다.");
+        } else {
+          state.bookmarks.add(q.id);
+          showToast("⭐ 중요 문제로 북마크했습니다!");
+        }
+        saveLocalState();
+        renderQuestion();
+      });
+    }
 
     // Result Actions
     if (DOM.restartDailyBtn) DOM.restartDailyBtn.addEventListener("click", () => switchMode("daily"));
@@ -2866,16 +3263,17 @@
       });
     }
 
-    // Resume Quiz Banner
+    // Resume Quiz Banner (skipLoad: true preserves restored questions & userAnswers!)
     if (DOM.btnResumeQuiz) {
       DOM.btnResumeQuiz.addEventListener("click", () => {
         const restored = restoreActiveQuizSession(state);
         if (restored) {
-          switchMode(state.mode || "daily");
+          switchMode(state.mode || "daily", { skipLoad: true, skipModal: true });
+          if (DOM.resumeQuizBanner) DOM.resumeQuizBanner.classList.add("hidden");
           renderQuestion();
           updateItemUI();
           updateShieldBadge();
-          showToast("⚡ 이전에 풀던 10문제를 복원했습니다!");
+          showToast("⚡ 이전에 풀던 문제를 이어서 복원했습니다!");
         }
       });
     }
@@ -2905,12 +3303,7 @@
       });
     }
 
-    // Level Mode & Modal
-    if (DOM.tabModeLevel) {
-      DOM.tabModeLevel.addEventListener("click", () => {
-        if (DOM.modalLevelSelect) DOM.modalLevelSelect.classList.remove("hidden");
-      });
-    }
+    // Level Mode Modal Controls (Single clean trigger via modeTabs -> switchMode("level"))
     if (DOM.btnCloseLevelModal && DOM.modalLevelSelect) {
       DOM.btnCloseLevelModal.addEventListener("click", () => {
         DOM.modalLevelSelect.classList.add("hidden");
@@ -2923,7 +3316,7 @@
           DOM.levelOptCards.forEach(c => c.classList.remove("active"));
           card.classList.add("active");
           if (DOM.modalLevelSelect) DOM.modalLevelSelect.classList.add("hidden");
-          switchMode("level");
+          switchMode("level", { skipLoad: true, skipModal: true });
           loadLevelQuestions(lvl, 1);
         });
       });
@@ -2989,8 +3382,50 @@
       DOM.searchInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
+          // IME-safe Enter guard (Korean/CJK + Safari WebKit bug 165004 keyCode 229 fallback)
+          if (e.isComposing || e.keyCode === 229) return;
           performSearch(DOM.searchInput.value);
         }
+      });
+    }
+
+    // v3.3.0 Fixed Top PWA Install Banner Controls (Rule 15.3)
+    if (DOM.btnBannerInstallNow) {
+      DOM.btnBannerInstallNow.addEventListener("click", () => {
+        if (state.deferredPwaPrompt) {
+          triggerPwaPrompt();
+        } else {
+          const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+          openPwaGuideModal(isIos ? "ios" : "android");
+        }
+      });
+    }
+    if (DOM.btnBannerDismiss && DOM.pwaInstallBanner) {
+      DOM.btnBannerDismiss.addEventListener("click", () => {
+        DOM.pwaInstallBanner.classList.add("hidden");
+        try {
+          if (typeof sessionStorage !== "undefined") {
+            sessionStorage.setItem("haruelec_pwa_banner_dismissed", "1");
+          }
+        } catch (e) {}
+      });
+    }
+
+    // v3.3.0 What's New Modal Controls (Rule 16.4)
+    if (DOM.btnCloseWhatsNew) {
+      DOM.btnCloseWhatsNew.addEventListener("click", dismissWhatsNewPopup);
+    }
+    if (DOM.btnConfirmWhatsNew) {
+      DOM.btnConfirmWhatsNew.addEventListener("click", dismissWhatsNewPopup);
+    }
+
+    // Recipient Select sync with label
+    if (DOM.msgRecipientSelect) {
+      DOM.msgRecipientSelect.addEventListener("change", () => {
+        const val = DOM.msgRecipientSelect.value;
+        const optText = DOM.msgRecipientSelect.options[DOM.msgRecipientSelect.selectedIndex]?.textContent || val;
+        state.currentRecipient = { name: val === "전체 수험생" ? "전체 수험생" : optText.replace(/^⚡\s*/, ""), username: val };
+        if (DOM.msgRecipientName) DOM.msgRecipientName.textContent = state.currentRecipient.name;
       });
     }
 
@@ -3152,16 +3587,24 @@
     checkAppVersionUpdate();
     checkUnreadMessages();
     updatePushToggleUI();
+    setTimeout(() => checkWhatsNewPopup(), 600);
   }
 
+  // Safe DOM initialization guard (works even when script runs after DOMContentLoaded in WebView/PWA)
   if (typeof document !== "undefined") {
-    document.addEventListener("DOMContentLoaded", init);
+    if (document.readyState === "interactive" || document.readyState === "complete") {
+      init();
+    } else if (typeof document.addEventListener === "function") {
+      document.addEventListener("DOMContentLoaded", init);
+    }
   }
 
   // Export for testing in Node.js
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       CURRENT_APP_VERSION,
+      escapeHtml,
+      mergeServerUserIntoState,
       getKSTDateString,
       shuffleQuestionOptions,
       shuffleArray,

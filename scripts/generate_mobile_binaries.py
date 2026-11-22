@@ -17,8 +17,8 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 RELEASE_DIR = os.path.join(ROOT_DIR, "releases")
 PUBLIC_DIR = os.path.join(ROOT_DIR, "public")
 
-VERSION = "3.2.0"
-BUILD_NUM = "320"
+VERSION = "3.3.0"
+BUILD_NUM = "330"
 APP_NAME = "HaruElec"
 APP_DISPLAY_NAME = "하루전기"
 BUNDLE_ID = "com.danminlove.elec"
@@ -46,7 +46,7 @@ with open(src_c, "w", encoding="utf-8") as f:
 #include <stdlib.h>
 
 int main(int argc, char *argv[]) {
-    printf("하루전기 (HaruElec) iOS Native App v3.2.0 initialized\\n");
+    printf("하루전기 (HaruElec) iOS Native App v3.3.0 initialized\\n");
     return 0;
 }
 ''')

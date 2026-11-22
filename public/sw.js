@@ -1,16 +1,28 @@
 /**
- * 하루 10제 전기기사 (HaruElec) - PWA Service Worker & Web Push Engine
- * Handles App Lifecycle, Offline Caching, Background Push Notifications & Realtime Message Routing
+ * 하루 10제 전기기사 (HaruElec) - PWA Service Worker & Web Push Engine (v3.3.0)
+ * Handles App Shell Precaching, Network-First Caching, Background Push & Realtime Message Routing
  */
 
-const CACHE_NAME = 'haruelec-pwa-v3.2.0';
+const CACHE_NAME = 'haruelec-pwa-v3.3.0';
+const APP_SHELL_URLS = [
+  '/',
+  '/index.html',
+  '/css/style.css?v=3.3.0',
+  '/js/app.js?v=3.3.0',
+  '/public/icons/icon-192.png',
+  '/public/icons/icon-512.png'
+];
 
-// 1. Service Worker Installation
+// 1. Service Worker Installation & App Shell Precaching
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(APP_SHELL_URLS).catch(() => {}))
+      .then(() => self.skipWaiting())
+  );
 });
 
-// 2. Service Worker Activation & Cache Cleanup
+// 2. Service Worker Activation & Old Cache Cleanup
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -41,7 +53,7 @@ self.addEventListener('push', (event) => {
     body: data.body || '새로운 응원 메시지가 도착했습니다! 목표를 향해 파이팅! 🔥',
     icon: data.icon || '/public/icons/icon-192.png',
     badge: data.badge || '/public/icons/badge-72.png',
-    vibrate: [200, 100, 200, 100], // Tactile electric pulse
+    vibrate: [200, 100, 200, 100],
     tag: data.tag || 'haruelec-msg-' + Date.now(),
     renotify: true,
     requireInteraction: false,
@@ -52,7 +64,6 @@ self.addEventListener('push', (event) => {
     }
   };
 
-  // Broadcast to open client tabs
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
@@ -92,17 +103,34 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// 5. Fetch Event Listener (Ensures API & releases bypass cache)
+// 5. Fetch Event Listener (Network-First with Real Cache Persistence & Offline Fallback)
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
 
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/data/') || url.pathname.startsWith('/releases/')) {
+  // Bypass cache for dynamic APIs, data, releases, and version checks
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/data/') ||
+    url.pathname.startsWith('/releases/') ||
+    url.pathname === '/manifest.json' ||
+    url.pathname === '/sw.js'
+  ) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // Network-first strategy with cache fallback
+  // Network-first strategy: persist fresh response into CacheStorage for offline fallback
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.ok && networkResponse.type === 'basic') {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
   );
 });

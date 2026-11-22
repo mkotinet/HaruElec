@@ -2,14 +2,16 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="app-version" content="3.2.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="app-version" content="3.3.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>⚡ 하루전기 (Haru Elec) - 전기기사 필기 & 실기 10문제 CBT</title>
   <meta name="description" content="매일 10문제로 완성하는 전기기사 필기 & 실기 CBT 문제은행, KEC 해설 및 수험생 응원 메시지">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
   
   <!-- PWA & Mobile Web App Meta -->
   <link rel="manifest" href="/manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="하루전기">
@@ -23,13 +25,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
-  <!-- KaTeX for beautiful math equations -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <!-- KaTeX for beautiful math equations (SRI + CORS + Referrer Protected) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <!-- App Stylesheet -->
-  <link rel="stylesheet" href="/css/style.css?v=3.2.0">
+  <link rel="stylesheet" href="/css/style.css?v=3.3.0">
 </head>
 <body>
   <!-- Header (Mobile Responsive & Zero-Overflow Layout) -->
@@ -95,6 +97,18 @@
 
   <!-- Main Container -->
   <main class="main-content container">
+
+    <!-- Fixed Top PWA Install Banner (Rule 15.3) -->
+    <div class="pwa-install-banner glass hidden" id="pwaInstallBanner">
+      <div class="pwa-banner-info">
+        <span>📱</span>
+        <span>홈 화면에 <strong>하루전기 앱</strong>을 추가하고 1초 만에 실행하세요!</span>
+      </div>
+      <div class="pwa-banner-actions">
+        <button class="btn btn-primary btn-sm" id="btnBannerInstallNow" type="button">📥 앱 추가하기</button>
+        <button class="btn btn-outline-sm btn-sm" id="btnBannerDismiss" type="button" aria-label="설치 배너 닫기">✕</button>
+      </div>
+    </div>
 
     <!-- Exam Track Switcher (Written vs Practical) -->
     <div class="exam-track-toggle-bar glass" id="examTrackToggleBar">
@@ -248,7 +262,7 @@
         <input type="text" id="searchInput" class="search-input" placeholder="키워드 검색 (예: KEC, 인덕턴스, 누전차단기, 쿨롱, 접지...)">
         <button class="btn btn-primary" id="searchSubmitBtn">검색</button>
       </div>
-      <div class="search-info-text" id="searchInfoText">전체 125제 문제은행 및 KEC 규정 검색어를 입력하세요.</div>
+      <div class="search-info-text" id="searchInfoText">전체 300제 문제은행 및 KEC 규정 검색어를 입력하세요.</div>
     </div>
 
     <!-- Quiz Session View -->
@@ -591,11 +605,15 @@
           </p>
         </div>
         <div style="margin-bottom: 16px;">
-          <h4 style="color: var(--accent-elec); font-size: 1rem; margin-bottom: 6px;">⚡ 전기 찬스 아이템</h4>
+          <h4 style="color: var(--accent-elec); font-size: 1rem; margin-bottom: 6px;">⚡ 전기 찬스 아이템 (7종)</h4>
           <p style="margin: 0; color: var(--text-muted); font-size: 0.88rem;">
-            • <strong>⚡ 50:50 전력 차단</strong>: 오답 보기 2개를 즉시 소거하여 정답 확률을 높입니다.<br>
-            • <strong>💖 절연 보호</strong>: 오답을 선택해도 1회 면제되어 다른 보기를 다시 고를 수 있습니다.<br>
-            • <strong>🚀 2배 부스터</strong>: 이번 라운드에서 획득하는 모든 점수가 2배로 적립됩니다.
+            • <strong>⚡ 50:50 차단기</strong>: 오답 보기 2개를 즉시 소거하여 정답 확률을 높입니다.<br>
+            • <strong>💖 비상 발전기</strong>: 오답을 선택해도 1회 면제되어 다른 보기를 다시 고를 수 있습니다.<br>
+            • <strong>🚀 2배 승압기</strong>: 이번 라운드에서 획득하는 모든 점수가 2배로 적립됩니다.<br>
+            • <strong>🔍 공식 계측기</strong>: 현재 문제의 핵심 공식 및 KEC 규정 힌트를 확인합니다.<br>
+            • <strong>🍀 통전 클로버</strong>: 현재 문제를 즉시 정답으로 인정하고 해설과 함께 통과합니다.<br>
+            • <strong>⌛ 리셋 스위치</strong>: 오답을 선택한 직후 실수를 되돌려 다시 풀 수 있습니다.<br>
+            • <strong>🧲 전자석 콤보</strong>: 만점 달성 시 콤보 보너스 점수를 2배로 추가 흡수합니다.
           </p>
         </div>
         <div>
@@ -701,7 +719,7 @@
         <div id="qnetScheduleListContainer" style="display: flex; flex-direction: column; gap: 12px;">
           <!-- Dynamically populated from /api/qnet-schedule -->
         </div>
-        <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end;">
+        <div class="modal-actions-sticky" style="display: flex; gap: 8px; justify-content: flex-end;">
           <a href="https://www.q-net.or.kr/crf005.do?id=crf00505&gSite=Q&gId=&jmCd=1150" target="_blank" rel="noopener" class="btn btn-outline-sm">Q-Net 원서접수 바로가기 ↗</a>
           <a href="https://www.kea.kr" target="_blank" rel="noopener" class="btn btn-outline-sm">대한전기협회 KEC 포털 ↗</a>
         </div>
@@ -724,24 +742,30 @@
       </div>
 
       <!-- Android Panel -->
-      <div class="pwa-panel" id="panelPwaAndroid">
+      <div class="pwa-panel modal-body" id="panelPwaAndroid">
         <div class="pwa-download-box" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 14px; text-align: center;">
           <div style="font-size: 2rem; margin-bottom: 6px;">🤖</div>
           <strong style="font-size: 1.05rem; color: #38bdf8; display: block; margin-bottom: 4px;">안드로이드 완제품 APK 설치 파일</strong>
-          <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 12px;">DEX 바이트코드 컴파일 & 전자서명 완료 (0.44 MB)</span>
-          <a href="/releases/HaruElec-v3.2.0-release.apk" class="btn btn-primary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; font-weight: 700; border-radius: 20px; text-decoration: none;">
-            <span>📥</span> HaruElec-v3.2.0.apk 다운로드
+          <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 12px;">DEX 바이트코드 컴파일 & 전자서명 완료 (0.45 MB)</span>
+          <a href="/releases/HaruElec-v3.3.0-release.apk" class="btn btn-primary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; font-weight: 700; border-radius: 20px; text-decoration: none;">
+            <span>📥</span> HaruElec-v3.3.0.apk 다운로드
           </a>
         </div>
 
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
-          <strong style="color: var(--accent-gold); font-size: 0.9rem; display: block; margin-bottom: 6px;">🌟 또는 1초 만에 Chrome 앱으로 홈 화면 추가 (PWA)</strong>
+          <strong style="color: var(--accent-gold); font-size: 0.9rem; display: block; margin-bottom: 6px;">🌟 구글 크롬(Chrome) 1초 독립 앱 설치 (추천)</strong>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
-            Chrome 브라우저에서 아래 버튼을 터치하여 바로 홈 화면에 독립형 앱으로 설치할 수 있습니다.
+            Chrome 브라우저에서 아래 버튼 또는 주소창 우측 [설치 📥] 아이콘으로 독립 WebAPK를 바로 설치할 수 있습니다.
           </p>
           <button id="btnPwaPromptTrigger" class="btn btn-outline-sm" style="width: 100%; border-color: #38bdf8; color: #38bdf8; font-weight: 700; padding: 8px;">
             📲 원클릭 홈 화면 앱 설치
           </button>
+        </div>
+
+        <div style="background: rgba(250, 204, 21, 0.06); border: 1px solid rgba(250, 204, 21, 0.25); border-radius: 12px; padding: 12px; margin-bottom: 10px; font-size: 0.8rem; color: var(--text-main); line-height: 1.55;">
+          <strong style="color: var(--accent-elec); display: block; margin-bottom: 4px;">🧭 삼성인터넷 / 네이버 웨일 브라우저 안내</strong>
+          • <strong>삼성인터넷</strong>: 하단 <strong>[≡ 더보기] ➔ [현재 페이지 추가]</strong>에서 단순 '홈 화면'(북마크)이 아닌 반드시 <strong>👉 [앱 (App)]</strong>을 선택해야 독립 앱으로 설치됩니다.<br>
+          • <strong>네이버 웨일</strong>: 브라우저 정책상 북마크 형태로 저장되므로, 전체화면 독립 앱 및 알림을 원하시면 <strong>크롬 또는 삼성인터넷</strong> 사용을 권장합니다.
         </div>
 
         <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; padding: 0 4px;">
@@ -750,7 +774,7 @@
       </div>
 
       <!-- iOS Panel -->
-      <div class="pwa-panel hidden" id="panelPwaIos">
+      <div class="pwa-panel modal-body hidden" id="panelPwaIos">
         <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 14px;">
           <strong style="color: #f59e0b; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
             <span>🌟</span> [추천] Safari에서 10초 만에 네이티브 앱 추가 (0초 설치)
@@ -769,8 +793,8 @@
         <div class="pwa-download-box" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 14px; text-align: center;">
           <strong style="font-size: 0.9rem; color: var(--text-main); display: block; margin-bottom: 4px;">🍎 아이폰 IPA 직접 설치 파일 (.ipa)</strong>
           <span style="font-size: 0.78rem; color: var(--text-muted); display: block; margin-bottom: 10px;">64-bit arm64 Mach-O & Web Bundle (Sideloadly / Scarlet 지원)</span>
-          <a href="/releases/HaruElec-v3.2.0.ipa" class="btn btn-secondary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; border-radius: 20px; text-decoration: none;">
-            <span>📥</span> HaruElec-v3.2.0.ipa 다운로드
+          <a href="/releases/HaruElec-v3.3.0.ipa" class="btn btn-secondary" download style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; border-radius: 20px; text-decoration: none;">
+            <span>📥</span> HaruElec-v3.3.0.ipa 다운로드
           </a>
         </div>
       </div>
@@ -788,10 +812,13 @@
       </div>
       <div class="modal-body" style="padding-top: 10px;">
         <div style="margin-bottom: 12px;">
-          <label style="font-size: 0.82rem; color: var(--text-muted); display: block; margin-bottom: 4px;">받는 수험생</label>
-          <div id="msgRecipientDisplay" style="background: rgba(255, 255, 255, 0.06); padding: 8px 12px; border-radius: 8px; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 6px;">
+          <label for="msgRecipientSelect" style="font-size: 0.82rem; color: var(--text-muted); display: block; margin-bottom: 4px;">받는 수험생</label>
+          <div id="msgRecipientDisplay" style="background: rgba(255, 255, 255, 0.06); padding: 8px 12px; border-radius: 8px; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
             <span>⚡</span> <span id="msgRecipientName">전체 수험생</span>
           </div>
+          <select id="msgRecipientSelect" class="form-input" style="padding: 8px 10px; font-size: 0.85rem;">
+            <option value="전체 수험생">📢 전체 수험생에게 응원 보내기</option>
+          </select>
         </div>
 
         <div style="margin-bottom: 12px;">
@@ -814,7 +841,7 @@
           <textarea id="msgContentInput" maxlength="200" rows="3" placeholder="따뜻한 응원과 합격 격려의 한마디를 남겨보세요! (최대 200자)" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: white; padding: 10px; font-family: inherit; font-size: 0.9rem; resize: none;"></textarea>
         </div>
 
-        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <div class="modal-actions-sticky" style="display: flex; gap: 8px; justify-content: flex-end;">
           <button type="button" class="btn btn-secondary" id="btnCancelSendMsg">취소</button>
           <button type="button" class="btn btn-primary" id="btnSendMsgSubmit" style="font-weight: 700;">💌 응원 발송하기</button>
         </div>
@@ -880,10 +907,31 @@
     </div>
   </div>
 
+  <!-- What's New / Release Notes Auto Modal (Rule 16.4) -->
+  <div class="modal-overlay hidden" id="modalWhatsNew">
+    <div class="modal-card glass" style="max-width: 480px; width: 92%;">
+      <div class="modal-header">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="whatsnew-version-badge" id="whatsNewVersionBadge">🚀 v3.3.0 업데이트</span>
+          <h3 style="margin: 0;">새로운 기능 & 개선 안내</h3>
+        </div>
+        <button class="btn-close" id="btnCloseWhatsNew" type="button" aria-label="업데이트 안내 닫기">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="whatsNewBuildDate" style="font-size: 0.78rem; color: var(--text-dim); margin-bottom: 8px;"></div>
+        <p id="whatsNewSummary" style="font-size: 0.88rem; color: var(--text-main); line-height: 1.55; margin-bottom: 10px;"></p>
+        <div class="whatsnew-feature-list" id="whatsNewFeatureList"></div>
+      </div>
+      <div class="modal-actions-sticky">
+        <button type="button" class="btn btn-primary btn-block" id="btnConfirmWhatsNew" style="margin-top: 0; font-weight: 700;">확인하고 계속하기 ⚡</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification -->
   <div class="toast hidden" id="appToast">알림 메시지</div>
 
   <!-- App Script -->
-  <script src="/js/app.js?v=3.2.0"></script>
+  <script src="/js/app.js?v=3.3.0"></script>
 </body>
 </html>

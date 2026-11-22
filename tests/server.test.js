@@ -52,7 +52,8 @@ async function runTests() {
     assert.strictEqual(health.status, 200);
     assert.strictEqual(health.data.status, "ok");
     assert.strictEqual(health.data.service, "HaruElec");
-    assert.strictEqual(health.data.version, "2.1.0");
+    const pkgVersion = require("../version.json").version;
+    assert.strictEqual(health.data.version, pkgVersion);
 
     console.log("2. Testing GET /api/questions/daily (Deterministic seed & subject balance)");
     const daily1 = await request("GET", "/api/questions/daily?date=2026-11-13");
